@@ -216,7 +216,8 @@ const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,
 let me=ls.get("mqr_name")||"";
 
 function toast(t,err){const el=$("#toast");el.textContent=t;el.className="toast"+(err?" err":"");el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2800)}
-function slugCode(n){const b=n.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[łŁ]/g,"L").toUpperCase().replace(/[^A-Z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,24)||"PROD";return "MAG-"+b+"-"+Math.random().toString(36).slice(2,6).toUpperCase()}
+function slugCode(n){const base=slugBase(n);let c=base,i=2;while(items.some(x=>x.code===c))c=base+"-"+i++;return c}
+function slugBase(n){const b=n.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[łŁ]/g,"L").toUpperCase().replace(/[^A-Z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,24)||"PROD";return "MAG-"+b}
 
 /* imię pracownika */
 function renderWho(){$("#who").textContent=me?me:"Ustaw imię"}
@@ -270,17 +271,24 @@ function renderHist(){const pp=$("#fPP").value.trim(),it=$("#fItem").value;
   const t={};l.forEach(e=>t[e.name]=(t[e.name]||0)+e.qty);
   $("#totals").innerHTML=Object.entries(t).map(([n,q])=>`<span class="chip">${esc(n)}<b>${q}</b></span>`).join("")||'<span class="note">—</span>'}
 $("#fPP").oninput=renderHist;$("#fItem").onchange=renderHist;
-function renderProd(){$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
+function renderProd(){$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button><button class="del" data-delitem="${esc(i.code)}" data-nm="${esc(i.name)}" aria-label="Usuń produkt">✕</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
 
 /* naklejka QR */
+$("#prodList").addEventListener("click",async e=>{
+  const d=e.target.closest("[data-delitem]"),yes=e.target.closest("[data-yesitem]"),no=e.target.closest("[data-noitem]");
+  if(d){const row=d.closest(".prod");row.querySelector(".meta").insertAdjacentHTML("beforeend",`<div class="confirm" style="justify-content:flex-start;margin-top:8px"><span class="note">Usunąć z listy? Historia wpisów zostanie.</span><button class="btn" data-yesitem="${esc(d.dataset.delitem)}">Usuń</button><button class="btn ghost" data-noitem>Anuluj</button></div>`);d.remove();return}
+  if(no){renderProd();return}
+  if(yes){yes.disabled=true;try{await post({action:"deleteItem",code:yes.dataset.yesitem});toast("Usunięto produkt");await loadItems()}catch(err){toast(err.message,true);renderProd()}}
+});
 $("#prodList").onclick=e=>{const b=e.target.closest("[data-qr]");if(!b)return;
   const code=b.dataset.qr,name=b.dataset.nm,q=qrcode(0,"M");q.addData(code);q.make();
-  const n=q.getModuleCount(),cell=12,pad=48,size=n*cell+pad*2,h=size+110,c=document.createElement("canvas");
+  const n=q.getModuleCount(),cell=12,pad=48,size=n*cell+pad*2,h=size+70,c=document.createElement("canvas");
   c.width=size;c.height=h;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,size,h);x.fillStyle="#000";
   for(let r=0;r<n;r++)for(let k=0;k<n;k++)if(q.isDark(r,k))x.fillRect(pad+k*cell,pad+r*cell,cell,cell);
-  x.textAlign="center";x.font="bold 44px Arial";x.fillText(name.toUpperCase(),size/2,size+40);x.font="22px monospace";x.fillText(code,size/2,size+80);
+  x.textAlign="center";x.font="bold 44px Arial";x.fillText(name.toUpperCase(),size/2,size+30,size-40);
   const a=document.createElement("a");a.download="QR-"+name.replace(/[^\p{L}\p{N}]+/gu,"_")+".png";a.href=c.toDataURL("image/png");a.click()};
 $("#pAdd").onclick=async()=>{const name=$("#pName").value.trim();if(!name)return $("#pName").focus();
+  if(items.some(i=>i.name.trim().toLowerCase()===name.toLowerCase()))return toast(`„${name}” już jest na liście — użyj „Pobierz QR” przy nim`,true);
   try{await post({action:"addItem",code:slugCode(name),name});$("#pName").value="";toast("Dodano: "+name);loadItems()}catch(e){toast(e.message,true)}};
 
 /* skaner */
