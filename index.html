@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1e1c">
+<title>Magazyn QR</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+/* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwUXy164fSMRqTUNLgcXGAiPVZ9TFYqKhZclqPIiY5J8kU705fW3HJV_3nQxqsH7EdxBA/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
+// PIN NIE jest zapisany w tym pliku — każdy wpisuje go raz w aplikacji.
+/* ================================================= */
+</script>
+<style>
+:root{
+  --bg:#f3f4f1;--surface:#fff;--fg:#1b1e1c;--muted:#5f6660;--line:#d9dcd6;
+  --accent:#f2b705;--accent-ink:#1b1e1c;--err:#b3261e;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));padding-block:0 40px}
+header{position:sticky;top:0;z-index:5;background:#1b1e1c;color:#f3f4f1}
+header .wrap{padding-block:12px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:.02em;margin:0;text-transform:uppercase}
+h1 span{color:#f5c22b}
+.who{font-size:14px;opacity:.8;background:none;border:0;color:inherit;font-family:inherit;cursor:pointer;text-decoration:underline dotted}
+nav{display:flex;gap:4px}
+nav button{flex:1;background:none;border:0;color:inherit;opacity:.7;font:600 15px var(--body);padding:10px 2px 12px;border-bottom:3px solid transparent;cursor:pointer}
+nav button[aria-selected="true"]{opacity:1;border-color:#f5c22b}
+h2{font-family:var(--display);font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.03em;margin:24px 0 10px}
+.label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.scanbtn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:96px;margin-top:20px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;font:700 26px var(--display);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;background-image:repeating-linear-gradient(135deg,transparent 0 18px,rgba(0,0,0,.06) 18px 36px)}
+.scanbtn svg{width:34px;height:34px}
+#reader{width:100%;margin-top:16px;border-radius:6px;overflow:hidden;background:#000}
+#reader video{width:100%!important;display:block}
+.row{display:flex;gap:8px}
+input,select{font:500 17px var(--body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:11px 12px;min-width:0;width:100%}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.btn{font:600 16px var(--body);border-radius:4px;padding:11px 16px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--fg);white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.btn.primary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn.big{width:100%;padding:15px;font-size:18px}
+.btn.ghost{background:none;border-color:transparent;color:var(--muted)}
+.btn:disabled{opacity:.45}
+.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.item-name{font-family:var(--display);font-weight:700;font-size:38px;line-height:1;text-transform:uppercase}
+.code{font-family:var(--mono);font-size:13px;color:var(--muted);word-break:break-all}
+.lines{display:flex;flex-direction:column;gap:8px}
+.line{display:grid;grid-template-columns:88px 1fr 44px;gap:8px;align-items:center}
+.line .x{border:0;background:none;color:var(--muted);font-size:22px;cursor:pointer;height:44px}
+.pp{position:relative}
+.pp::before{content:"PP";position:absolute;left:12px;top:50%;transform:translateY(-50%);font:600 14px var(--mono);color:var(--muted);pointer-events:none}
+.pp input{padding-left:40px;font-family:var(--mono)}
+.qty input{text-align:center;font-family:var(--mono)}
+.sum{font-size:14px;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:12px 18px;border-radius:6px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
+.toast.err{background:var(--err);color:#fff}
+.note{font-size:14px;color:var(--muted)}
+.msg{font-size:14px;color:var(--err)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px 6px;border-bottom:2px solid var(--line)}
+td{padding:10px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.ppc{font-family:var(--mono);white-space:nowrap}
+.sub{font-size:12px;color:var(--muted)}
+.scroll{overflow-x:auto}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.totals{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:6px 10px;font-size:14px}
+.chip b{font-family:var(--mono);margin-left:6px}
+.prod{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.prod .meta{flex:1;min-width:0}
+.prod .nm{font-weight:600}
+.seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px}
+.seg button{flex:1;border:0;background:none;color:var(--muted);font:600 14px var(--body);padding:9px 4px;border-radius:4px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font:700 28px var(--display);line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.grp{border-bottom:1px solid var(--line)}
+.grp summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px 2px;cursor:pointer}
+.grp summary::-webkit-details-marker{display:none}
+.grp summary::before{content:"›";font-size:22px;color:var(--muted);width:12px;transition:transform .15s}
+.grp[open] summary::before{transform:rotate(90deg)}
+.grp .gname{flex:1;min-width:0;font-weight:600}
+.grp .gsub{font-size:13px;color:var(--muted);font-weight:400}
+.grp .gq{font:600 18px var(--mono);white-space:nowrap}
+.grp table{margin:0 0 12px 22px;width:calc(100% - 22px)}
+.grp td{padding:7px 6px}
+.stats{background:var(--bg);border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.stats .top{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.stats .pps{display:flex;flex-wrap:wrap;gap:6px}
+.del{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px}
+.confirm{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.confirm .btn{padding:6px 10px;font-size:14px}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand"><h1>Magazyn <span>QR</span></h1><button class="who" id="who"></button></div>
+    <nav>
+      <button data-v="scan" aria-selected="true">Skanuj</button>
+      <button data-v="rep" aria-selected="false">Raport</button>
+      <button data-v="hist" aria-selected="false">Historia</button>
+      <button data-v="prod" aria-selected="false">Produkty</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="v-scan">
+    <button class="scanbtn" id="scanBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><path d="M7 12h10"/></svg>
+      <span id="scanLbl">Zeskanuj kod</span>
+    </button>
+    <div id="reader" hidden></div>
+    <div class="row" style="margin-top:12px">
+      <input id="manual" placeholder="lub wpisz kod / skaner ręczny" autocomplete="off">
+      <button class="btn" id="manualGo">OK</button>
+    </div>
+    <label class="note" style="display:block;margin-top:8px">Kamera nie działa? <span style="text-decoration:underline">Zrób zdjęcie kodu</span>
+      <input id="photo" type="file" accept="image/*" capture="environment" style="position:absolute;opacity:0;width:1px;height:1px"></label>
+    <div id="scanMsg" class="msg" hidden></div>
+
+    <div id="newItem" class="panel" style="margin-top:20px" hidden>
+      <div class="label">Nowy kod — nadaj nazwę</div>
+      <div class="code" id="newCode"></div>
+      <input id="newName" placeholder="np. Zegar">
+      <button class="btn primary big" id="newSave">Zapisz produkt</button>
+    </div>
+
+    <div id="itemPanel" class="panel" style="margin-top:20px" hidden>
+      <div class="item-head">
+        <div><div class="label">Zeskanowano</div><div class="item-name" id="itemName"></div><div class="code" id="itemCode"></div></div>
+        <button class="btn ghost" id="itemClose" aria-label="Zamknij">✕</button>
+      </div>
+      <div class="stats" id="itemStats"></div>
+      <div class="line"><span class="label">Ilość</span><span class="label">Numer PP</span><span></span></div>
+      <div class="lines" id="lines"></div>
+      <button class="btn" id="addLine">+ Dodaj kolejny PP</button>
+      <div class="sum" id="sum"></div>
+      <button class="btn primary big" id="saveEntries">Zapisz</button>
+    </div>
+
+    <h2>Ostatnie wpisy</h2>
+    <div id="recent"><div class="empty">Ładowanie…</div></div>
+  </section>
+
+  <section id="v-rep" hidden>
+    <h2>Raport</h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="seg" id="period">
+        <button data-p="today" aria-pressed="false">Dziś</button>
+        <button data-p="7" aria-pressed="false">7 dni</button>
+        <button data-p="30" aria-pressed="false">30 dni</button>
+        <button data-p="all" aria-pressed="true">Wszystko</button>
+      </div>
+      <div class="seg" id="group">
+        <button data-g="prod" aria-pressed="true">Wg produktu</button>
+        <button data-g="pp" aria-pressed="false">Wg PP</button>
+      </div>
+      <input id="rSearch" placeholder="Szukaj produktu lub numeru PP" autocomplete="off">
+      <div class="kpis" id="kpi"></div>
+    </div>
+    <div id="repList" style="margin-top:8px"></div>
+  </section>
+
+  <section id="v-hist" hidden>
+    <h2>Historia</h2>
+    <div class="filters">
+      <input id="fPP" placeholder="Filtruj PP" inputmode="numeric">
+      <select id="fItem"><option value="">Wszystkie produkty</option></select>
+    </div>
+    <div class="label" style="margin-top:16px">Suma wg filtra</div>
+    <div class="totals" id="totals" style="margin-top:8px"></div>
+    <div class="row" style="margin:16px 0 8px"><button class="btn" id="csv">Pobierz do Excela (CSV)</button><button class="btn ghost" id="refresh">Odśwież</button></div>
+    <div class="scroll"><table><thead><tr><th>Produkt</th><th>PP</th><th style="text-align:right">Ilość</th><th></th></tr></thead><tbody id="histBody"></tbody></table></div>
+    <div id="histEmpty" class="empty" hidden>Brak wpisów.</div>
+  </section>
+
+  <section id="v-prod" hidden>
+    <h2>Produkty</h2>
+    <p class="note">Pobierz naklejkę z kodem QR, wydrukuj i naklej na półkę lub karton.</p>
+    <div class="panel">
+      <div class="label">Dodaj produkt</div>
+      <div class="row"><input id="pName" placeholder="Nazwa, np. Zegar"><button class="btn primary" id="pAdd">Dodaj</button></div>
+    </div>
+    <div id="prodList" style="margin-top:12px"></div>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let items=[],entries=[],current=null,scanner=null,scanning=false;
+const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+let me=ls.get("mqr_name")||"";
+
+function toast(t,err){const el=$("#toast");el.textContent=t;el.className="toast"+(err?" err":"");el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2800)}
+function slugCode(n){const b=n.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[łŁ]/g,"L").toUpperCase().replace(/[^A-Z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,24)||"PROD";return "MAG-"+b+"-"+Math.random().toString(36).slice(2,6).toUpperCase()}
+
+/* imię pracownika */
+function renderWho(){$("#who").textContent=me?me:"Ustaw imię"}
+$("#who").onclick=()=>{const p=$("#namePanel");if(p){p.remove();return}
+  const d=document.createElement("div");d.id="namePanel";d.className="panel";d.style.marginTop="16px";
+  d.innerHTML=`<div class="label">Twoje imię (widoczne przy wpisach)</div><div class="row"><input id="nmIn" value="${esc(me)}" placeholder="np. Anton"><button class="btn primary" id="nmOk">OK</button></div>`;
+  $("main").prepend(d);$("#nmIn").focus();
+  $("#nmOk").onclick=()=>{me=$("#nmIn").value.trim();ls.set("mqr_name",me);renderWho();d.remove()}};
+renderWho();
+
+/* PIN */
+let pin=ls.get("mqr_pin")||"";
+function askPin(msg){
+  if($("#pinPanel"))return;
+  const d=document.createElement("div");d.id="pinPanel";d.className="panel";d.style.marginTop="16px";
+  d.innerHTML=`<div class="label">PIN magazynu</div>${msg?`<div class="msg">${esc(msg)}</div>`:`<div class="note">Wpisz PIN, który dostałeś od kierownika. Telefon go zapamięta.</div>`}
+    <div class="row"><input id="pinIn" type="password" autocomplete="off" placeholder="PIN"><button class="btn primary" id="pinOk">OK</button></div>`;
+  $("main").prepend(d);$("#pinIn").focus();
+  const ok=()=>{const v=$("#pinIn").value.trim();if(!v)return;pin=v;ls.set("mqr_pin",v);d.remove();loadItems();loadEntries()};
+  $("#pinOk").onclick=ok;$("#pinIn").onkeydown=e=>{if(e.key==="Enter")ok()}}
+function badPin(){pin="";ls.set("mqr_pin","");askPin("Zły PIN. Wpisz go jeszcze raz.")}
+
+/* API */
+async function api(action,params={}){
+  if(!SCRIPT_URL)throw new Error("Brak SCRIPT_URL w index.html");
+  if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
+  const r=await fetch(SCRIPT_URL+"?"+new URLSearchParams({action,token:pin,...params}));
+  const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
+async function post(body){
+  if(!SCRIPT_URL)throw new Error("Brak SCRIPT_URL w index.html");
+  if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
+  const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({...body,token:pin})});
+  const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
+async function loadItems(){try{items=(await api("items")).items;renderProd();renderFilter()}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
+async function loadEntries(){try{entries=(await api("entries",{limit:5000})).entries;renderEntries()}catch(e){$("#recent").innerHTML=`<div class="empty">${e.pin?"Wpisz PIN, żeby zobaczyć wpisy.":esc(e.message)}</div>`}}
+
+/* zakładki */
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  ["scan","rep","hist","prod"].forEach(k=>$("#v-"+k).hidden=k!==b.dataset.v);
+  if(b.dataset.v!=="scan")stopScan();if(b.dataset.v!=="scan"&&b.dataset.v!=="prod")loadEntries()});
+
+/* widoki */
+function renderRecent(){const l=entries.slice(0,6);
+  $("#recent").innerHTML=l.length?`<div class="scroll"><table><tbody>${l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">PP ${esc(e.pp)}</td><td class="n">${e.qty} szt.</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Tu pojawią się zapisane wpisy.</div>`}
+function renderFilter(){const s=$("#fItem"),v=s.value;s.innerHTML='<option value="">Wszystkie produkty</option>'+items.map(i=>`<option value="${esc(i.code)}">${esc(i.name)}</option>`).join("");s.value=v}
+function renderHist(){const pp=$("#fPP").value.trim(),it=$("#fItem").value;
+  const l=entries.filter(e=>(!pp||e.pp.includes(pp))&&(!it||e.code===it));
+  $("#histEmpty").hidden=l.length>0;
+  $("#histBody").innerHTML=l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">${esc(e.pp)}</td><td class="n">${e.qty}</td><td><button class="del" data-del="${esc(e.id)}" aria-label="Usuń wpis">✕</button></td></tr>`).join("");
+  const t={};l.forEach(e=>t[e.name]=(t[e.name]||0)+e.qty);
+  $("#totals").innerHTML=Object.entries(t).map(([n,q])=>`<span class="chip">${esc(n)}<b>${q}</b></span>`).join("")||'<span class="note">—</span>'}
+$("#fPP").oninput=renderHist;$("#fItem").onchange=renderHist;
+function renderProd(){$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
+
+/* naklejka QR */
+$("#prodList").onclick=e=>{const b=e.target.closest("[data-qr]");if(!b)return;
+  const code=b.dataset.qr,name=b.dataset.nm,q=qrcode(0,"M");q.addData(code);q.make();
+  const n=q.getModuleCount(),cell=12,pad=48,size=n*cell+pad*2,h=size+110,c=document.createElement("canvas");
+  c.width=size;c.height=h;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,size,h);x.fillStyle="#000";
+  for(let r=0;r<n;r++)for(let k=0;k<n;k++)if(q.isDark(r,k))x.fillRect(pad+k*cell,pad+r*cell,cell,cell);
+  x.textAlign="center";x.font="bold 44px Arial";x.fillText(name.toUpperCase(),size/2,size+40);x.font="22px monospace";x.fillText(code,size/2,size+80);
+  const a=document.createElement("a");a.download="QR-"+name.replace(/[^\p{L}\p{N}]+/gu,"_")+".png";a.href=c.toDataURL("image/png");a.click()};
+$("#pAdd").onclick=async()=>{const name=$("#pName").value.trim();if(!name)return $("#pName").focus();
+  try{await post({action:"addItem",code:slugCode(name),name});$("#pName").value="";toast("Dodano: "+name);loadItems()}catch(e){toast(e.message,true)}};
+
+/* skaner */
+async function startScan(){
+  $("#scanMsg").hidden=true;$("#reader").hidden=false;$("#scanLbl").textContent="Zatrzymaj";scanning=true;
+  scanner=scanner||new Html5Qrcode("reader");
+  try{await scanner.start({facingMode:"environment"},{fps:10,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*0.7);return{width:s,height:s}}},
+      code=>{stopScan();if(navigator.vibrate)navigator.vibrate(80);openCode(code)},()=>{})}
+  catch(e){stopScan();$("#scanMsg").textContent="Nie udało się włączyć kamery. Zezwól przeglądarce na dostęp do aparatu albo użyj „Zrób zdjęcie kodu”.";$("#scanMsg").hidden=false}}
+async function stopScan(){if(scanner&&scanning){scanning=false;try{await scanner.stop()}catch{}}scanning=false;$("#reader").hidden=true;$("#scanLbl").textContent="Zeskanuj kod"}
+$("#scanBtn").onclick=()=>scanning?stopScan():startScan();
+$("#photo").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{scanner=scanner||new Html5Qrcode("reader");const code=await scanner.scanFile(f,false);openCode(code)}
+  catch{$("#scanMsg").textContent="Nie znaleziono kodu na zdjęciu. Podejdź bliżej i spróbuj jeszcze raz.";$("#scanMsg").hidden=false}};
+$("#manualGo").onclick=()=>{const v=$("#manual").value.trim();if(v){openCode(v);$("#manual").value=""}};
+$("#manual").onkeydown=e=>{if(e.key==="Enter")$("#manualGo").click()};
+
+function openCode(code){code=code.trim();$("#scanMsg").hidden=true;
+  const it=items.find(i=>i.code===code);
+  if(!it){$("#itemPanel").hidden=true;$("#newItem").hidden=false;$("#newCode").textContent=code;$("#newItem").dataset.code=code;$("#newName").value="";$("#newName").focus();return}
+  $("#newItem").hidden=true;current=it;$("#itemName").textContent=it.name;$("#itemCode").textContent=it.code;
+  $("#lines").innerHTML="";addLine();renderItemStats();$("#itemPanel").hidden=false}
+$("#newSave").onclick=async()=>{const name=$("#newName").value.trim(),code=$("#newItem").dataset.code;if(!name)return $("#newName").focus();
+  try{await post({action:"addItem",code,name});items.push({code,name});renderProd();renderFilter();openCode(code)}catch(e){toast(e.message,true)}};
+
+let lineN=0;
+function addLine(){const i=++lineN,d=document.createElement("div");d.className="line";
+  d.innerHTML=`<div class="qty"><input id="q${i}" type="number" inputmode="numeric" min="1" placeholder="0" aria-label="Ilość"></div><div class="pp"><input id="p${i}" inputmode="numeric" placeholder="1468" aria-label="Numer PP"></div><button class="x" aria-label="Usuń wiersz">✕</button>`;
+  d.querySelector(".x").onclick=()=>{if($("#lines").children.length>1){d.remove();updSum()}};
+  d.addEventListener("input",updSum);$("#lines").appendChild(d);d.querySelector("input").focus();updSum()}
+function readLines(){return[...$("#lines").children].map(d=>({qty:Number(d.querySelector(".qty input").value),pp:d.querySelector(".pp input").value.trim()}))}
+function updSum(){const l=readLines().filter(x=>x.qty>0&&x.pp),s=l.reduce((a,x)=>a+x.qty,0);$("#sum").textContent=l.length?`Razem: ${s} szt. na ${l.length} PP`:""}
+$("#addLine").onclick=addLine;
+$("#itemClose").onclick=()=>{$("#itemPanel").hidden=true;current=null};
+$("#saveEntries").onclick=async()=>{if(!current)return;
+  const raw=readLines().filter(x=>x.qty||x.pp);
+  if(!raw.length)return toast("Wpisz ilość i numer PP",true);
+  if(raw.some(x=>!(x.qty>0)||!x.pp))return toast("Każdy wiersz potrzebuje ilości i numeru PP",true);
+  if(!me){toast("Najpierw ustaw swoje imię (u góry)",true);$("#who").click();return}
+  const b=$("#saveEntries");b.disabled=true;b.textContent="Zapisuję…";
+  try{const r=await post({action:"addEntries",code:current.code,name:current.name,by:me,lines:raw});
+    toast(`Zapisano ${r.saved}× ${current.name}`);$("#itemPanel").hidden=true;current=null;loadEntries()}
+  catch(e){toast("Nie zapisano: "+e.message,true)}
+  finally{b.disabled=false;b.textContent="Zapisz"}};
+
+/* ===== wyświetlanie danych w aplikacji ===== */
+let period="all",group="prod";
+function renderEntries(){renderRecent();renderHist();renderReport();if(current)renderItemStats()}
+const pad2=n=>String(n).padStart(2,"0");
+const dayStr=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+function inPeriod(e){if(period==="all")return true;const d=new Date();
+  if(period!=="today")d.setDate(d.getDate()-Number(period)+1);return e.at.slice(0,10)>=dayStr(d)}
+const fmtQ=n=>n.toLocaleString("pl-PL");
+
+function renderReport(){
+  const q=$("#rSearch").value.trim().toLowerCase();
+  const list=entries.filter(inPeriod).filter(e=>!q||e.name.toLowerCase().includes(q)||e.pp.toLowerCase().includes(q));
+  const total=list.reduce((a,e)=>a+e.qty,0),pps=new Set(list.map(e=>e.pp)).size;
+  $("#kpi").innerHTML=`<div class="kpi"><b>${fmtQ(total)}</b><span>sztuk</span></div><div class="kpi"><b>${fmtQ(pps)}</b><span>numerów PP</span></div><div class="kpi"><b>${fmtQ(list.length)}</b><span>wpisów</span></div>`;
+  const key=group==="prod"?"name":"pp",sub=group==="prod"?"pp":"name";
+  const g=new Map();
+  list.forEach(e=>{const k=e[key];if(!g.has(k))g.set(k,{total:0,parts:new Map()});const o=g.get(k);o.total+=e.qty;o.parts.set(e[sub],(o.parts.get(e[sub])||0)+e.qty)});
+  const groups=[...g.entries()].sort((a,b)=>b[1].total-a[1].total);
+  if(!groups.length){$("#repList").innerHTML=`<div class="empty">${entries.length?"Brak wpisów dla tego filtra.":"Brak wpisów. Zeskanuj kod, żeby dodać pierwszy."}</div>`;return}
+  $("#repList").innerHTML=groups.map(([k,o])=>{
+    const parts=[...o.parts.entries()].sort((a,b)=>b[1]-a[1]);
+    const title=group==="prod"?esc(k):"PP "+esc(k);
+    const n=parts.length,pl=(n%10>=2&&n%10<=4&&(n%100<12||n%100>14))?"produkty":"produktów";const subTxt=group==="prod"?`na ${n} PP`:`${n} ${n===1?"produkt":pl}`;
+    return `<details class="grp"><summary><span class="gname">${title}<div class="gsub">${subTxt}</div></span><span class="gq">${fmtQ(o.total)} szt.</span></summary>
+      <table><tbody>${parts.map(([s,n])=>`<tr><td class="${group==="prod"?"ppc":""}">${group==="prod"?"PP "+esc(s):esc(s)}</td><td class="n">${fmtQ(n)} szt.</td></tr>`).join("")}</tbody></table></details>`}).join("");
+}
+$("#period").onclick=e=>{const b=e.target.closest("[data-p]");if(!b)return;period=b.dataset.p;
+  $("#period").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderReport()};
+$("#group").onclick=e=>{const b=e.target.closest("[data-g]");if(!b)return;group=b.dataset.g;
+  $("#group").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderReport()};
+$("#rSearch").oninput=renderReport;
+
+function renderItemStats(){
+  const l=entries.filter(e=>e.code===current.code);
+  if(!l.length){$("#itemStats").innerHTML='<div class="note">Brak wcześniejszych wpisów dla tego produktu.</div>';return}
+  const total=l.reduce((a,e)=>a+e.qty,0),by=new Map();l.forEach(e=>by.set(e.pp,(by.get(e.pp)||0)+e.qty));
+  const top=[...by.entries()].sort((a,b)=>b[1]-a[1]),show=top.slice(0,8);
+  $("#itemStats").innerHTML=`<div class="top"><span class="label">Razem wydano</span><b style="font-family:var(--mono)">${fmtQ(total)} szt.</b></div>
+    <div class="pps">${show.map(([pp,n])=>`<span class="chip">PP ${esc(pp)}<b>${fmtQ(n)}</b></span>`).join("")}${top.length>8?`<span class="note">+${top.length-8} PP</span>`:""}</div>
+    <div class="sub">Ostatni wpis: ${esc(l[0].at)} ${esc(l[0].by)}</div>`;
+}
+
+/* usuwanie wpisu z potwierdzeniem */
+$("#histBody").addEventListener("click",async ev=>{
+  const del=ev.target.closest("[data-del]"),yes=ev.target.closest("[data-yes]"),no=ev.target.closest("[data-no]");
+  if(del){del.parentElement.innerHTML=`<div class="confirm"><button class="btn" data-yes="${esc(del.dataset.del)}">Usuń</button><button class="btn ghost" data-no>Anuluj</button></div>`;return}
+  if(no){renderHist();return}
+  if(yes){yes.disabled=true;yes.textContent="…";
+    try{await post({action:"deleteEntry",id:yes.dataset.yes});toast("Usunięto wpis");await loadEntries()}
+    catch(e){toast("Nie usunięto: "+e.message,true);renderHist()}}
+});
+
+/* eksport CSV */
+$("#csv").onclick=()=>{
+  const pp=$("#fPP").value.trim(),it=$("#fItem").value;
+  const l=entries.filter(e=>(!pp||e.pp.includes(pp))&&(!it||e.code===it));
+  if(!l.length)return toast("Brak wpisów do pobrania",true);
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const csv="\ufeff"+["Data;Produkt;Kod;PP;Ilość;Kto",...l.map(e=>[e.at,e.name,e.code,e.pp,e.qty,e.by].map(q).join(";"))].join("\r\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="magazyn-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+$("#refresh").onclick=()=>{loadEntries();toast("Odświeżono")};
+
+/* automatyczne odświeżanie: co 30 s i po powrocie do aplikacji */
+setInterval(()=>{if(!document.hidden&&pin)loadEntries()},30000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&pin){loadEntries();loadItems()}});
+
+loadItems();loadEntries();
+
+/* instalacja jako aplikacja */
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+let installEvt=null;
+addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;
+  const b=document.createElement("button");b.className="btn primary big";b.style.marginTop="16px";b.textContent="Zainstaluj aplikację na telefonie";
+  b.onclick=async()=>{installEvt.prompt();await installEvt.userChoice;installEvt=null;b.remove()};
+  $("#v-scan").prepend(b)});
+</script>
+</body>
+</html>
