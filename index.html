@@ -40,7 +40,7 @@ h1{font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:.02e
 h1 span{color:#f5c22b}
 .who{font-size:14px;opacity:.8;background:none;border:0;color:inherit;font-family:inherit;cursor:pointer;text-decoration:underline dotted}
 nav{display:flex;gap:4px}
-nav button{flex:1;background:none;border:0;color:inherit;opacity:.7;font:600 15px var(--body);padding:10px 2px 12px;border-bottom:3px solid transparent;cursor:pointer}
+nav button{flex:1;position:relative;background:none;border:0;color:inherit;opacity:.7;font:600 14px var(--body);padding:10px 0 12px;border-bottom:3px solid transparent;cursor:pointer}
 nav button[aria-selected="true"]{opacity:1;border-color:#f5c22b}
 h2{font-family:var(--display);font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.03em;margin:24px 0 10px}
 .label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
@@ -119,6 +119,23 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
 .del{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px}
 .confirm{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .confirm .btn{padding:6px 10px;font-size:14px}
+nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;border-radius:50%;background:#f2877f}
+.stan{display:flex;align-items:center;gap:12px;padding:12px 0 12px 10px;border-bottom:1px solid var(--line);border-left:4px solid transparent}
+.stan.low{border-left-color:var(--err)}
+.stan .meta{flex:1;min-width:0}
+.stan .nm{font-weight:600}
+.stan .q{text-align:right;white-space:nowrap}
+.stan .q b{display:block;font:700 26px var(--display);line-height:1.05;font-variant-numeric:tabular-nums}
+.stan.low .q b,.neg{color:var(--err)}
+.minbtn{border:0;background:none;color:var(--muted);font:500 13px var(--body);padding:2px 0;cursor:pointer;text-decoration:underline dotted}
+.minedit{display:flex;gap:6px;margin-top:6px;max-width:220px}
+.minedit input{padding:6px 8px;font-size:15px}
+.minedit .btn{padding:6px 10px;font-size:14px}
+.big-stan{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.big-stan b{font:700 30px var(--display);font-variant-numeric:tabular-nums}
+.tag{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:3px;background:var(--line);color:var(--fg);white-space:nowrap}
+.tag.P{background:#2e7d32;color:#fff}
+.tag.K{background:#5c6bc0;color:#fff}
 .empty{padding:28px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:6px}
 </style>
 </head>
@@ -128,6 +145,7 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
     <div class="brand"><h1>Magazyn <span>QR</span></h1><button class="who" id="who"></button></div>
     <nav>
       <button data-v="scan" aria-selected="true">Skanuj</button>
+      <button data-v="stan" aria-selected="false">Stany<span class="dot" id="lowDot" hidden></span></button>
       <button data-v="rep" aria-selected="false">Raport</button>
       <button data-v="hist" aria-selected="false">Historia</button>
       <button data-v="prod" aria-selected="false">Produkty</button>
@@ -172,15 +190,47 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
         <button class="btn ghost" id="itemClose" aria-label="Zamknij">✕</button>
       </div>
       <div class="stats" id="itemStats"></div>
-      <div class="line"><span class="label">Ilość</span><span class="label">Numer PP</span><span></span></div>
-      <div class="lines" id="lines"></div>
-      <button class="btn" id="addLine">+ Dodaj kolejny PP</button>
+      <div class="seg" id="mode">
+        <button data-m="W" aria-pressed="true">Wydanie</button>
+        <button data-m="P" aria-pressed="false">Przyjęcie</button>
+        <button data-m="K" aria-pressed="false">Inwentaryzacja</button>
+      </div>
+      <div id="mW" style="display:flex;flex-direction:column;gap:12px">
+        <div class="line"><span class="label">Ilość</span><span class="label">Numer PP</span><span></span></div>
+        <div class="lines" id="lines"></div>
+        <button class="btn" id="addLine">+ Dodaj kolejny PP</button>
+      </div>
+      <div id="mP" hidden>
+        <div class="line" style="grid-template-columns:88px 1fr"><span class="label">Ilość</span><span class="label">Dokument (opcjonalnie)</span>
+          <div class="qty"><input id="rQty" type="number" inputmode="numeric" min="1" placeholder="0" aria-label="Ilość"></div>
+          <input id="rDoc" placeholder="np. PZ 12/2026 lub nr faktury" aria-label="Dokument"></div>
+      </div>
+      <div id="mK" hidden>
+        <div class="note" style="margin-bottom:8px">Policz, ile sztuk leży na półce, i wpisz wynik. Stan w aplikacji zostanie poprawiony.</div>
+        <div class="line" style="grid-template-columns:120px 1fr"><span class="label">Naliczono</span><span></span>
+          <div class="qty"><input id="kQty" type="number" inputmode="numeric" min="0" placeholder="0" aria-label="Naliczono"></div><span></span></div>
+      </div>
       <div class="sum" id="sum"></div>
-      <button class="btn primary big" id="saveEntries">Zapisz</button>
+      <button class="btn primary big" id="saveEntries">Zapisz wydanie</button>
     </div>
 
     <h2>Ostatnie wpisy</h2>
     <div id="recent"><div class="empty">Ładowanie…</div></div>
+  </section>
+
+  <section id="v-stan" hidden>
+    <h2>Stany</h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="kpis" id="sKpi"></div>
+      <div class="seg" id="sFilter">
+        <button data-f="all" aria-pressed="true">Wszystkie</button>
+        <button data-f="low" aria-pressed="false">Do zamówienia</button>
+      </div>
+      <input id="sSearch" placeholder="Szukaj produktu" autocomplete="off">
+    </div>
+    <div id="stanList" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:16px"><button class="btn" id="stanCsv">Pobierz stany (CSV)</button></div>
+    <p class="note">Stan = przyjęcia − wydania ± inwentaryzacja. Kliknij „min”, żeby ustawić minimalny stan — poniżej niego produkt trafia do „Do zamówienia”.</p>
   </section>
 
   <section id="v-rep" hidden>
@@ -207,11 +257,12 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
     <div class="filters">
       <input id="fPP" placeholder="Filtruj PP" inputmode="numeric">
       <select id="fItem"><option value="">Wszystkie produkty</option></select>
+      <select id="fType" style="grid-column:1/-1"><option value="">Wszystkie operacje</option><option value="W">Wydania</option><option value="P">Przyjęcia</option><option value="K">Inwentaryzacje</option></select>
     </div>
-    <div class="label" style="margin-top:16px">Suma wg filtra</div>
+    <div class="label" style="margin-top:16px">Wydano wg filtra</div>
     <div class="totals" id="totals" style="margin-top:8px"></div>
     <div class="row" style="margin:16px 0 8px"><button class="btn" id="csv">Pobierz do Excela (CSV)</button><button class="btn ghost" id="refresh">Odśwież</button></div>
-    <div class="scroll"><table><thead><tr><th>Produkt</th><th>PP</th><th style="text-align:right">Ilość</th><th></th></tr></thead><tbody id="histBody"></tbody></table></div>
+    <div class="scroll"><table><thead><tr><th>Produkt</th><th>PP / operacja</th><th style="text-align:right">Ilość</th><th></th></tr></thead><tbody id="histBody"></tbody></table></div>
     <div id="histEmpty" class="empty" hidden>Brak wpisów.</div>
   </section>
 
@@ -231,7 +282,7 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let items=[],entries=[],current=null,scanner=null,scanning=false;
+let items=[],entries=[],stock={},current=null,scanner=null,scanning=false,mode="W";
 const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
 let me=ls.get("mqr_name")||"";
 
@@ -271,26 +322,35 @@ async function post(body){
   if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
   const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({...body,token:pin})});
   const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
-async function loadItems(){try{items=(await api("items")).items;renderProd();renderFilter()}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
-async function loadEntries(){try{entries=(await api("entries",{limit:5000})).entries;renderEntries()}catch(e){$("#recent").innerHTML=`<div class="empty">${e.pin?"Wpisz PIN, żeby zobaczyć wpisy.":esc(e.message)}</div>`}}
+async function loadItems(){try{items=(await api("items")).items.map(i=>({...i,min:i.min||0}));renderProd();renderFilter();renderStany()}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
+async function loadEntries(){try{const j=await api("entries",{limit:5000});
+  entries=j.entries.map(e=>({...e,type:e.type||"W",doc:e.doc||""}));stock=j.stock||calcStock(entries);renderEntries()}catch(e){$("#recent").innerHTML=`<div class="empty">${e.pin?"Wpisz PIN, żeby zobaczyć wpisy.":esc(e.message)}</div>`}}
 
 /* zakładki */
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
-  ["scan","rep","hist","prod"].forEach(k=>$("#v-"+k).hidden=k!==b.dataset.v);
+  ["scan","stan","rep","hist","prod"].forEach(k=>$("#v-"+k).hidden=k!==b.dataset.v);
   if(b.dataset.v!=="scan")stopScan();if(b.dataset.v!=="scan"&&b.dataset.v!=="prod")loadEntries()});
 
 /* widoki */
+/* wpisy mają typ: W = wydanie (na PP), P = przyjęcie, K = korekta z inwentaryzacji (ilość ze znakiem) */
+const sgn=n=>(n>0?"+":n<0?"−":"±")+fmtQ(Math.abs(n));
+function opCell(e){return e.type==="P"?`<span class="tag P">Przyjęcie</span>${e.doc?`<div class="sub">${esc(e.doc)}</div>`:""}`
+  :e.type==="K"?`<span class="tag K">Inwentaryzacja</span><div class="sub">${esc(e.doc)}</div>`:"PP "+esc(e.pp)}
+const qtyCell=e=>e.type==="W"?fmtQ(e.qty):sgn(e.qty);
+function calcStock(l){const m={};l.forEach(e=>m[e.code]=(m[e.code]||0)+(e.type==="W"?-e.qty:e.qty));return m}
+const stanOf=code=>stock[code]||0;
 function renderRecent(){const l=entries.slice(0,6);
-  $("#recent").innerHTML=l.length?`<div class="scroll"><table><tbody>${l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">PP ${esc(e.pp)}</td><td class="n">${e.qty} szt.</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Tu pojawią się zapisane wpisy.</div>`}
+  $("#recent").innerHTML=l.length?`<div class="scroll"><table><tbody>${l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">${opCell(e)}</td><td class="n">${qtyCell(e)} szt.</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Tu pojawią się zapisane wpisy.</div>`}
 function renderFilter(){const s=$("#fItem"),v=s.value;s.innerHTML='<option value="">Wszystkie produkty</option>'+items.map(i=>`<option value="${esc(i.code)}">${esc(i.name)}</option>`).join("");s.value=v}
-function renderHist(){const pp=$("#fPP").value.trim(),it=$("#fItem").value;
-  const l=entries.filter(e=>(!pp||e.pp.includes(pp))&&(!it||e.code===it));
+const histList=()=>{const pp=$("#fPP").value.trim(),it=$("#fItem").value,ty=$("#fType").value;
+  return entries.filter(e=>(!pp||(e.type==="W"&&e.pp.includes(pp)))&&(!it||e.code===it)&&(!ty||e.type===ty))};
+function renderHist(){const l=histList();
   $("#histEmpty").hidden=l.length>0;
-  $("#histBody").innerHTML=l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">${esc(e.pp)}</td><td class="n">${e.qty}</td><td><button class="del" data-del="${esc(e.id)}" aria-label="Usuń wpis">✕</button></td></tr>`).join("");
-  const t={};l.forEach(e=>t[e.name]=(t[e.name]||0)+e.qty);
+  $("#histBody").innerHTML=l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">${opCell(e)}</td><td class="n">${qtyCell(e)}</td><td><button class="del" data-del="${esc(e.id)}" aria-label="Usuń wpis">✕</button></td></tr>`).join("");
+  const t={};l.filter(e=>e.type==="W").forEach(e=>t[e.name]=(t[e.name]||0)+e.qty);
   $("#totals").innerHTML=Object.entries(t).map(([n,q])=>`<span class="chip">${esc(n)}<b>${q}</b></span>`).join("")||'<span class="note">—</span>'}
-$("#fPP").oninput=renderHist;$("#fItem").onchange=renderHist;
+$("#fPP").oninput=renderHist;$("#fItem").onchange=renderHist;$("#fType").onchange=renderHist;
 function renderProd(){$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button><button class="del" data-delitem="${esc(i.code)}" data-nm="${esc(i.name)}" aria-label="Usuń produkt">✕</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
 
 /* naklejka QR */
@@ -377,7 +437,15 @@ function openCode(code){code=code.trim();$("#scanMsg").hidden=true;
   const it=items.find(i=>i.code===code);
   if(!it){$("#itemPanel").hidden=true;$("#newItem").hidden=false;$("#newCode").textContent=code;$("#newItem").dataset.code=code;$("#newName").value="";$("#newName").focus();return}
   $("#newItem").hidden=true;current=it;$("#itemName").textContent=it.name;$("#itemCode").textContent=it.code;
-  $("#lines").innerHTML="";addLine();renderItemStats();$("#itemPanel").hidden=false}
+  $("#lines").innerHTML="";addLine();$("#rQty").value="";$("#rDoc").value="";$("#kQty").value="";
+  setMode(mode);renderItemStats();$("#itemPanel").hidden=false;focusMode()}
+// tryb zostaje do końca sesji — przy przyjmowaniu dostawy nie trzeba przełączać przy każdym kodzie
+const SAVE_LBL={W:"Zapisz wydanie",P:"Zapisz przyjęcie",K:"Zapisz stan"};
+function setMode(m){mode=m;$("#mode").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.m===m));
+  ["W","P","K"].forEach(k=>$("#m"+k).hidden=k!==m);$("#saveEntries").textContent=SAVE_LBL[m];updSum()}
+function focusMode(){const el=mode==="W"?$("#lines input"):mode==="P"?$("#rQty"):$("#kQty");if(el)el.focus()}
+$("#mode").onclick=e=>{const b=e.target.closest("[data-m]");if(b){setMode(b.dataset.m);focusMode()}};
+$("#mP").oninput=updSum;$("#mK").oninput=updSum;
 $("#newSave").onclick=async()=>{const name=$("#newName").value.trim(),code=$("#newItem").dataset.code;if(!name)return $("#newName").focus();
   try{await post({action:"addItem",code,name});items.push({code,name});renderProd();renderFilter();openCode(code)}catch(e){toast(e.message,true)}};
 
@@ -387,23 +455,34 @@ function addLine(){const i=++lineN,d=document.createElement("div");d.className="
   d.querySelector(".x").onclick=()=>{if($("#lines").children.length>1){d.remove();updSum()}};
   d.addEventListener("input",updSum);$("#lines").appendChild(d);d.querySelector("input").focus();updSum()}
 function readLines(){return[...$("#lines").children].map(d=>({qty:Number(d.querySelector(".qty input").value),pp:d.querySelector(".pp input").value.trim()}))}
-function updSum(){const l=readLines().filter(x=>x.qty>0&&x.pp),s=l.reduce((a,x)=>a+x.qty,0);$("#sum").textContent=l.length?`Razem: ${s} szt. na ${l.length} PP`:""}
+function updSum(){if(!current)return;const st=stanOf(current.code),el=$("#sum");let t="",bad=false;
+  if(mode==="W"){const l=readLines().filter(x=>x.qty>0&&x.pp),s=l.reduce((a,x)=>a+x.qty,0);
+    if(l.length){const left=st-s;bad=left<0||(current.min>0&&left<current.min);t=`Razem: ${fmtQ(s)} szt. na ${l.length} PP · zostanie ${fmtQ(left)} szt.`}}
+  else if(mode==="P"){const q=Number($("#rQty").value);if(q>0)t=`Po przyjęciu na stanie: ${fmtQ(st+q)} szt.`}
+  else{const v=$("#kQty").value;if(v!==""){const d=Number(v)-st;t=d?`W aplikacji ${fmtQ(st)} szt. → korekta ${sgn(d)} szt.`:"Zgadza się ze stanem w aplikacji."}}
+  el.textContent=t;el.classList.toggle("neg",bad)}
 $("#addLine").onclick=addLine;
 $("#itemClose").onclick=()=>{$("#itemPanel").hidden=true;current=null};
 $("#saveEntries").onclick=async()=>{if(!current)return;
-  const raw=readLines().filter(x=>x.qty||x.pp);
-  if(!raw.length)return toast("Wpisz ilość i numer PP",true);
-  if(raw.some(x=>!(x.qty>0)||!x.pp))return toast("Każdy wiersz potrzebuje ilości i numeru PP",true);
+  let body,done;
+  if(mode==="W"){const raw=readLines().filter(x=>x.qty||x.pp);
+    if(!raw.length)return toast("Wpisz ilość i numer PP",true);
+    if(raw.some(x=>!(x.qty>0)||!x.pp))return toast("Każdy wiersz potrzebuje ilości i numeru PP",true);
+    body={action:"addEntries",lines:raw};done=()=>`Wydano ${fmtQ(raw.reduce((a,x)=>a+x.qty,0))} szt. ${current.name}`}
+  else if(mode==="P"){const q=Number($("#rQty").value);if(!(q>0))return toast("Wpisz przyjętą ilość",true);
+    body={action:"addReceipt",qty:q,doc:$("#rDoc").value.trim()};done=()=>`Przyjęto ${fmtQ(q)} szt. ${current.name}`}
+  else{const v=$("#kQty").value;if(v===""||!(Number(v)>=0))return toast("Wpisz policzoną ilość",true);
+    body={action:"inventory",counted:Number(v)};done=r=>r.diff?`Stan poprawiony: ${sgn(r.diff)} szt.`:"Stan się zgadza ✓"}
   if(!me){toast("Najpierw ustaw swoje imię (u góry)",true);$("#who").click();return}
   const b=$("#saveEntries");b.disabled=true;b.textContent="Zapisuję…";
-  try{const r=await post({action:"addEntries",code:current.code,name:current.name,by:me,lines:raw});
-    toast(`Zapisano ${r.saved}× ${current.name}`);$("#itemPanel").hidden=true;current=null;loadEntries()}
+  try{const r=await post({...body,code:current.code,name:current.name,by:me});
+    toast(done(r));$("#itemPanel").hidden=true;current=null;loadEntries()}
   catch(e){toast("Nie zapisano: "+e.message,true)}
-  finally{b.disabled=false;b.textContent="Zapisz"}};
+  finally{b.disabled=false;b.textContent=SAVE_LBL[mode]}};
 
 /* ===== wyświetlanie danych w aplikacji ===== */
 let period="all",group="prod";
-function renderEntries(){renderRecent();renderHist();renderReport();if(current)renderItemStats()}
+function renderEntries(){renderRecent();renderHist();renderReport();renderStany();if(current){renderItemStats();updSum()}}
 const pad2=n=>String(n).padStart(2,"0");
 const dayStr=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
 function inPeriod(e){if(period==="all")return true;const d=new Date();
@@ -412,9 +491,9 @@ const fmtQ=n=>n.toLocaleString("pl-PL");
 
 function renderReport(){
   const q=$("#rSearch").value.trim().toLowerCase();
-  const list=entries.filter(inPeriod).filter(e=>!q||e.name.toLowerCase().includes(q)||e.pp.toLowerCase().includes(q));
+  const list=entries.filter(e=>e.type==="W").filter(inPeriod).filter(e=>!q||e.name.toLowerCase().includes(q)||e.pp.toLowerCase().includes(q));
   const total=list.reduce((a,e)=>a+e.qty,0),pps=new Set(list.map(e=>e.pp)).size;
-  $("#kpi").innerHTML=`<div class="kpi"><b>${fmtQ(total)}</b><span>sztuk</span></div><div class="kpi"><b>${fmtQ(pps)}</b><span>numerów PP</span></div><div class="kpi"><b>${fmtQ(list.length)}</b><span>wpisów</span></div>`;
+  $("#kpi").innerHTML=`<div class="kpi"><b>${fmtQ(total)}</b><span>wydanych szt.</span></div><div class="kpi"><b>${fmtQ(pps)}</b><span>numerów PP</span></div><div class="kpi"><b>${fmtQ(list.length)}</b><span>wpisów</span></div>`;
   const key=group==="prod"?"name":"pp",sub=group==="prod"?"pp":"name";
   const g=new Map();
   list.forEach(e=>{const k=e[key];if(!g.has(k))g.set(k,{total:0,parts:new Map()});const o=g.get(k);o.total+=e.qty;o.parts.set(e[sub],(o.parts.get(e[sub])||0)+e.qty)});
@@ -434,14 +513,50 @@ $("#group").onclick=e=>{const b=e.target.closest("[data-g]");if(!b)return;group=
 $("#rSearch").oninput=renderReport;
 
 function renderItemStats(){
-  const l=entries.filter(e=>e.code===current.code);
-  if(!l.length){$("#itemStats").innerHTML='<div class="note">Brak wcześniejszych wpisów dla tego produktu.</div>';return}
+  const st=stanOf(current.code),low=current.min>0&&st<current.min;
+  const head=`<div class="big-stan"><span class="label">Na stanie${current.min?` · min ${fmtQ(current.min)}`:""}</span><b class="${st<0||low?"neg":""}">${fmtQ(st)} szt.</b></div>`;
+  const l=entries.filter(e=>e.code===current.code&&e.type==="W");
+  if(!l.length){$("#itemStats").innerHTML=head+'<div class="note">Brak wcześniejszych wydań tego produktu.</div>';return}
   const total=l.reduce((a,e)=>a+e.qty,0),by=new Map();l.forEach(e=>by.set(e.pp,(by.get(e.pp)||0)+e.qty));
   const top=[...by.entries()].sort((a,b)=>b[1]-a[1]),show=top.slice(0,8);
-  $("#itemStats").innerHTML=`<div class="top"><span class="label">Razem wydano</span><b style="font-family:var(--mono)">${fmtQ(total)} szt.</b></div>
+  $("#itemStats").innerHTML=head+`<div class="top"><span class="label">Razem wydano</span><b style="font-family:var(--mono)">${fmtQ(total)} szt.</b></div>
     <div class="pps">${show.map(([pp,n])=>`<span class="chip">PP ${esc(pp)}<b>${fmtQ(n)}</b></span>`).join("")}${top.length>8?`<span class="note">+${top.length-8} PP</span>`:""}</div>
-    <div class="sub">Ostatni wpis: ${esc(l[0].at)} ${esc(l[0].by)}</div>`;
+    <div class="sub">Ostatnie wydanie: ${esc(l[0].at)} ${esc(l[0].by)}</div>`;
 }
+
+/* stany magazynowe */
+let sFilter="all";
+const isLow=i=>i.min>0&&stanOf(i.code)<i.min;
+function renderStany(){
+  const low=items.filter(isLow);$("#lowDot").hidden=!low.length;
+  $("#sKpi").innerHTML=`<div class="kpi"><b>${fmtQ(items.length)}</b><span>produktów</span></div><div class="kpi"><b class="${low.length?"neg":""}">${fmtQ(low.length)}</b><span>do zamówienia</span></div><div class="kpi"><b>${fmtQ(items.reduce((a,i)=>a+Math.max(0,stanOf(i.code)),0))}</b><span>sztuk razem</span></div>`;
+  const q=$("#sSearch").value.trim().toLowerCase();
+  const l=items.filter(i=>(sFilter==="all"||isLow(i))&&(!q||i.name.toLowerCase().includes(q)))
+    .sort((a,b)=>isLow(b)-isLow(a)||a.name.localeCompare(b.name,"pl"));
+  if(!l.length){$("#stanList").innerHTML=`<div class="empty">${sFilter==="low"&&!q?"Nic nie trzeba zamawiać 👍":"Brak produktów."}</div>`;return}
+  $("#stanList").innerHTML=l.map(i=>{const st=stanOf(i.code);return `<div class="stan${isLow(i)?" low":""}"><div class="meta"><div class="nm">${esc(i.name)}</div>
+    <button class="minbtn" data-min="${esc(i.code)}">${i.min?`min ${fmtQ(i.min)}`:"ustaw min"}</button></div>
+    <div class="q"><b class="${st<0?"neg":""}">${fmtQ(st)}</b><span class="sub">szt.${isLow(i)?" · brakuje "+fmtQ(i.min-st):""}</span></div></div>`}).join("")}
+$("#sFilter").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;sFilter=b.dataset.f;
+  $("#sFilter").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderStany()};
+$("#sSearch").oninput=renderStany;
+$("#stanList").addEventListener("click",async e=>{
+  const m=e.target.closest("[data-min]"),ok=e.target.closest("[data-minok]"),no=e.target.closest("[data-minno]");
+  if(m){const it=items.find(i=>i.code===m.dataset.min);if(!it)return;
+    m.outerHTML=`<div class="minedit"><input type="number" inputmode="numeric" min="0" value="${it.min||""}" placeholder="min" aria-label="Minimalny stan"><button class="btn primary" data-minok="${esc(it.code)}">OK</button><button class="btn ghost" data-minno>✕</button></div>`;
+    $("#stanList .minedit input").focus();return}
+  if(no){renderStany();return}
+  if(ok){const it=items.find(i=>i.code===ok.dataset.minok),v=Math.max(0,Number(ok.parentElement.querySelector("input").value)||0);ok.disabled=true;
+    try{await post({action:"setMin",code:it.code,min:v});it.min=v;toast(v?`Minimum dla ${it.name}: ${fmtQ(v)} szt.`:`Usunięto minimum dla ${it.name}`)}
+    catch(err){toast("Nie zapisano: "+err.message,true)}
+    renderStany()}
+});
+$("#stanList").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.closest(".minedit"))e.target.parentElement.querySelector("[data-minok]").click()});
+$("#stanCsv").onclick=()=>{if(!items.length)return toast("Brak produktów",true);
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const csv="\ufeff"+["Produkt;Kod;Stan;Min;Do zamówienia",...items.map(i=>{const st=stanOf(i.code);return[i.name,i.code,st,i.min||"",isLow(i)?i.min-st:""].map(q).join(";")})].join("\r\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="stany-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 
 /* usuwanie wpisu z potwierdzeniem */
 $("#histBody").addEventListener("click",async ev=>{
@@ -455,11 +570,10 @@ $("#histBody").addEventListener("click",async ev=>{
 
 /* eksport CSV */
 $("#csv").onclick=()=>{
-  const pp=$("#fPP").value.trim(),it=$("#fItem").value;
-  const l=entries.filter(e=>(!pp||e.pp.includes(pp))&&(!it||e.code===it));
+  const l=histList();
   if(!l.length)return toast("Brak wpisów do pobrania",true);
   const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
-  const csv="\ufeff"+["Data;Produkt;Kod;PP;Ilość;Kto",...l.map(e=>[e.at,e.name,e.code,e.pp,e.qty,e.by].map(q).join(";"))].join("\r\n");
+  const csv="\ufeff"+["Data;Operacja;Produkt;Kod;PP;Ilość;Dokument;Kto",...l.map(e=>[e.at,{W:"Wydanie",P:"Przyjęcie",K:"Korekta"}[e.type],e.name,e.code,e.pp,e.qty,e.doc,e.by].map(q).join(";"))].join("\r\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download="magazyn-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 $("#refresh").onclick=()=>{loadEntries();toast("Odświeżono")};
