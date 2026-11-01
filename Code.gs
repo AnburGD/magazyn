@@ -6,10 +6,22 @@
  * Typ: Wydanie (puste = Wydanie, starsze wpisy), Przyjęcie, Korekta (inwentaryzacja).
  * Stan = przyjęcia − wydania + korekty (Ilość korekty ma znak, np. -3).
  *
- * TOKEN to PIN, który pracownicy wpisują raz w aplikacji na telefonie.
- * NIE wpisuj go do index.html. Zmiana PIN-u tutaj = wszyscy muszą wpisać nowy.
+ * PIN (wpisywany raz w aplikacji na telefonie) NIE jest w tym pliku — trzymamy go
+ * we właściwościach skryptu: Ustawienia projektu (⚙) → Właściwości skryptu →
+ * Właściwość: PIN, Wartość: twój PIN. Dzięki temu przy aktualizacji wklejasz cały plik bez zmian.
+ * Zmiana PIN-u tam = wszyscy muszą wpisać nowy.
  */
-const TOKEN = 'ZMIEN-NA-SWOJ-PIN';
+function pin() {
+  return PropertiesService.getScriptProperties().getProperty('PIN') || '';
+}
+
+// zwraca odpowiedź z błędem albo null, gdy PIN się zgadza
+function checkPin(given) {
+  const p = pin();
+  if (!p) return json({ ok: false, error: 'Brak PIN-u w ustawieniach skryptu — kierownik musi go ustawić (Właściwości skryptu → PIN)' });
+  if (given !== p) return json({ ok: false, error: 'Złe hasło (TOKEN)' });
+  return null;
+}
 
 function setup() {
   const ss = SpreadsheetApp.getActive();
@@ -74,7 +86,8 @@ function newId() {
 
 function doGet(e) {
   const p = e.parameter || {};
-  if (p.token !== TOKEN) return json({ ok: false, error: 'Złe hasło (TOKEN)' });
+  const bad = checkPin(p.token);
+  if (bad) return bad;
   if (p.action === 'items') {
     return json({ ok: true, items: rows('Produkty').filter(r => r[0]).map(r => ({ code: String(r[0]), name: String(r[1]), min: Number(r[2]) || 0 })) });
   }
@@ -98,7 +111,8 @@ function doGet(e) {
 function doPost(e) {
   let body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json({ ok: false, error: 'Zły format danych' }); }
-  if (body.token !== TOKEN) return json({ ok: false, error: 'Złe hasło (TOKEN)' });
+  const bad = checkPin(body.token);
+  if (bad) return bad;
   const ss = SpreadsheetApp.getActive();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
