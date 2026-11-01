@@ -13,6 +13,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
+const JSQR_URL = "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwUXy164fSMRqTUNLgcXGAiPVZ9TFYqKhZclqPIiY5J8kU705fW3HJV_3nQxqsH7EdxBA/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
 // PIN NIE jest zapisany w tym pliku — każdy wpisuje go raz w aplikacji.
@@ -46,8 +47,18 @@ h2{font-family:var(--display);font-weight:700;font-size:22px;text-transform:uppe
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .scanbtn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:96px;margin-top:20px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;font:700 26px var(--display);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;background-image:repeating-linear-gradient(135deg,transparent 0 18px,rgba(0,0,0,.06) 18px 36px)}
 .scanbtn svg{width:34px;height:34px}
-#reader{width:100%;margin-top:16px;border-radius:6px;overflow:hidden;background:#000}
-#reader video{width:100%!important;display:block}
+.scanview{position:fixed;inset:0;z-index:30;background:#000;color:#fff;display:flex;flex-direction:column}
+.scanview video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.aim{--c:#f5c22b;position:absolute;left:50%;top:50%;width:min(70vw,70vh);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:10px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);
+  background:linear-gradient(var(--c),var(--c)) 0 0/44px 5px,linear-gradient(var(--c),var(--c)) 0 0/5px 44px,linear-gradient(var(--c),var(--c)) 100% 0/44px 5px,linear-gradient(var(--c),var(--c)) 100% 0/5px 44px,
+  linear-gradient(var(--c),var(--c)) 0 100%/44px 5px,linear-gradient(var(--c),var(--c)) 0 100%/5px 44px,linear-gradient(var(--c),var(--c)) 100% 100%/44px 5px,linear-gradient(var(--c),var(--c)) 100% 100%/5px 44px;background-repeat:no-repeat}
+.scantop{position:relative;padding:calc(18px + env(safe-area-inset-top)) 16px 28px;text-align:center;font-weight:600;font-size:17px;background:linear-gradient(rgba(0,0,0,.65),transparent)}
+.scanbot{position:relative;margin-top:auto;padding:28px max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px;background:linear-gradient(transparent,rgba(0,0,0,.75))}
+.zoomrow{display:flex;align-items:center;gap:12px;font:600 14px var(--body)}
+.zoomrow input{flex:1;padding:0;accent-color:#f5c22b;background:none;border:0;height:32px}
+.zoomrow b{font-family:var(--mono);min-width:48px;text-align:right}
+.scanbot .row .btn{flex:1;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25);color:#fff;padding:15px;font-size:18px}
+.scanbot .btn[aria-pressed="true"]{background:#f5c22b;color:#1b1e1c;border-color:#f5c22b}
 .row{display:flex;gap:8px}
 input,select{font:500 17px var(--body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:11px 12px;min-width:0;width:100%}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
@@ -131,6 +142,15 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
       <span id="scanLbl">Zeskanuj kod</span>
     </button>
     <div id="reader" hidden></div>
+    <div id="scanView" class="scanview" hidden>
+      <video id="cam" playsinline muted></video>
+      <div class="aim" aria-hidden="true"></div>
+      <div class="scantop">Skieruj aparat na kod QR</div>
+      <div class="scanbot">
+        <label class="zoomrow" id="zoomRow" hidden>Przybliżenie<input id="zoom" type="range"><b id="zoomVal"></b></label>
+        <div class="row"><button class="btn" id="torch" aria-pressed="false" hidden>Latarka</button><button class="btn" id="scanClose">Zamknij</button></div>
+      </div>
+    </div>
     <div class="row" style="margin-top:12px">
       <input id="manual" placeholder="lub wpisz kod / skaner ręczny" autocomplete="off">
       <button class="btn" id="manualGo">OK</button>
@@ -291,15 +311,62 @@ $("#pAdd").onclick=async()=>{const name=$("#pName").value.trim();if(!name)return
   if(items.some(i=>i.name.trim().toLowerCase()===name.toLowerCase()))return toast(`„${name}” już jest na liście — użyj „Pobierz QR” przy nim`,true);
   try{await post({action:"addItem",code:slugCode(name),name});$("#pName").value="";toast("Dodano: "+name);loadItems()}catch(e){toast(e.message,true)}};
 
-/* skaner */
+/* skaner — pełny ekran; kadr w wysokiej rozdzielczości, żeby łapał kody z daleka */
+let stream=null,track=null,detector,jsqrCanvas=null,frameN=0,torchOn=false;
+const scanErr=t=>{$("#scanMsg").textContent=t;$("#scanMsg").hidden=false};
+function loadJsQR(){return window.jsQR?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement("script");s.src=JSQR_URL;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+async function getDetector(){if(!("BarcodeDetector" in window))return null;
+  try{return(await BarcodeDetector.getSupportedFormats()).includes("qr_code")?new BarcodeDetector({formats:["qr_code"]}):null}catch{return null}}
 async function startScan(){
-  $("#scanMsg").hidden=true;$("#reader").hidden=false;$("#scanLbl").textContent="Zatrzymaj";scanning=true;
-  scanner=scanner||new Html5Qrcode("reader");
-  try{await scanner.start({facingMode:"environment"},{fps:10,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*0.7);return{width:s,height:s}}},
-      code=>{stopScan();if(navigator.vibrate)navigator.vibrate(80);openCode(code)},()=>{})}
-  catch(e){stopScan();$("#scanMsg").textContent="Nie udało się włączyć kamery. Zezwól przeglądarce na dostęp do aparatu albo użyj „Zrób zdjęcie kodu”.";$("#scanMsg").hidden=false}}
-async function stopScan(){if(scanner&&scanning){scanning=false;try{await scanner.stop()}catch{}}scanning=false;$("#reader").hidden=true;$("#scanLbl").textContent="Zeskanuj kod"}
-$("#scanBtn").onclick=()=>scanning?stopScan():startScan();
+  if(scanning)return;
+  $("#scanMsg").hidden=true;scanning=true;frameN=0;
+  $("#scanView").hidden=false;document.body.style.overflow="hidden";history.pushState({scan:1},"");
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}}})}
+  catch{if(scanning){stopScan();scanErr("Nie udało się włączyć kamery. Zezwól przeglądarce na dostęp do aparatu albo użyj „Zrób zdjęcie kodu”.")}return}
+  if(!scanning){stream.getTracks().forEach(t=>t.stop());stream=null;return}
+  track=stream.getVideoTracks()[0];
+  try{const v=$("#cam");v.srcObject=stream;await v.play();
+    if(detector===undefined)detector=await getDetector();
+    if(!detector)await loadJsQR()}
+  catch{if(scanning){stopScan();scanErr("Nie udało się uruchomić skanera. Sprawdź internet albo użyj „Zrób zdjęcie kodu”.")}return}
+  if(!scanning)return;
+  camControls();tick()}
+function camControls(){
+  let caps={};try{caps=track.getCapabilities?track.getCapabilities():{}}catch{}
+  if(caps.focusMode&&caps.focusMode.includes("continuous"))track.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
+  const z=$("#zoom");$("#zoomRow").hidden=!caps.zoom;
+  if(caps.zoom){z.min=caps.zoom.min;z.max=caps.zoom.max;z.step=caps.zoom.step||0.1;z.value=track.getSettings().zoom||caps.zoom.min;zoomLbl()}
+  torchOn=false;$("#torch").hidden=!caps.torch;$("#torch").setAttribute("aria-pressed","false")}
+function zoomLbl(){$("#zoomVal").textContent=Number($("#zoom").value).toFixed(1)+"×"}
+$("#zoom").oninput=()=>{if(track)track.applyConstraints({advanced:[{zoom:Number($("#zoom").value)}]}).catch(()=>{});zoomLbl()};
+$("#torch").onclick=()=>{torchOn=!torchOn;if(track)track.applyConstraints({advanced:[{torch:torchOn}]}).catch(()=>{});$("#torch").setAttribute("aria-pressed",torchOn)};
+async function tick(){
+  if(!scanning)return;
+  const v=$("#cam");let code=null;
+  if(v.readyState>=2&&v.videoWidth){try{code=detector?((await detector.detect(v))[0]||{}).rawValue:readJsQR(v)}catch{}}
+  if(!scanning)return;
+  if(code){stopScan();if(navigator.vibrate)navigator.vibrate(80);openCode(code);return}
+  setTimeout(tick,detector?50:20)}
+function readJsQR(v){
+  const vw=v.videoWidth,vh=v.videoHeight,c=jsqrCanvas||(jsqrCanvas=document.createElement("canvas")),x=c.getContext("2d",{willReadFrequently:true});
+  let sx=0,sy=0,sw=vw,sh=vh,dw,dh;
+  // na zmianę: środek kadru w pełnej rozdzielczości (małe, dalekie kody) i cały kadr pomniejszony (duże, bliskie)
+  if(frameN++%2===0){const s=Math.round(Math.min(vw,vh)*0.7);sx=(vw-s)/2;sy=(vh-s)/2;sw=sh=dw=dh=s}
+  else{const k=Math.min(1,800/Math.max(vw,vh));dw=Math.round(vw*k);dh=Math.round(vh*k)}
+  c.width=dw;c.height=dh;x.drawImage(v,sx,sy,sw,sh,0,0,dw,dh);
+  const r=jsQR(x.getImageData(0,0,dw,dh).data,dw,dh,{inversionAttempts:"dontInvert"});
+  return r&&r.data}
+function stopScan(fromHistory){
+  if(!scanning&&$("#scanView").hidden)return;
+  scanning=false;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}track=null;
+  const v=$("#cam");v.pause();v.srcObject=null;
+  $("#scanView").hidden=true;document.body.style.overflow="";
+  if(fromHistory!==true&&history.state&&history.state.scan)history.back()}
+addEventListener("popstate",()=>stopScan(true));
+addEventListener("keydown",e=>{if(e.key==="Escape"&&scanning)stopScan()});
+$("#scanBtn").onclick=startScan;
+$("#scanClose").onclick=()=>stopScan();
 $("#photo").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
   try{scanner=scanner||new Html5Qrcode("reader");const code=await scanner.scanFile(f,false);openCode(code)}
   catch{$("#scanMsg").textContent="Nie znaleziono kodu na zdjęciu. Podejdź bliżej i spróbuj jeszcze raz.";$("#scanMsg").hidden=false}};
@@ -399,7 +466,7 @@ $("#refresh").onclick=()=>{loadEntries();toast("Odświeżono")};
 
 /* automatyczne odświeżanie: co 30 s i po powrocie do aplikacji */
 setInterval(()=>{if(!document.hidden&&pin)loadEntries()},30000);
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&pin){loadEntries();loadItems()}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){stopScan();return}if(pin){loadEntries();loadItems()}});
 
 loadItems();loadEntries();
 

@@ -1,9 +1,10 @@
 // Service worker: szybkie uruchamianie i działanie ekranu bez sieci.
 // Dane (produkty, wpisy) zawsze idą do Google Sheets, więc do zapisu potrzebny jest internet.
-const CACHE = "magazyn-qr-v3";
+const CACHE = "magazyn-qr-v4";
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png",
   "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"];
+  "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js",
+  "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE)
