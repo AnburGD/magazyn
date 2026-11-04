@@ -10,7 +10,12 @@
  * we właściwościach skryptu: Ustawienia projektu (⚙) → Właściwości skryptu →
  * Właściwość: PIN, Wartość: twój PIN. Dzięki temu przy aktualizacji wklejasz cały plik bez zmian.
  * Zmiana PIN-u tam = wszyscy muszą wpisać nowy.
+ *
+ * Ochrona przed zgadywaniem PIN-u: każda błędna próba czeka ~2 s, a po
+ * MAX_FAILS błędnych próbach w ciągu 10 minut skrypt blokuje się na LOCK_MIN minut
+ * (dla wszystkich) i zapisuje zdarzenie w arkuszu "Bezpieczeństwo".
  */
+const MAX_FAILS = 30, LOCK_MIN = 5;
 function pin() {
   return PropertiesService.getScriptProperties().getProperty('PIN') || '';
 }
@@ -19,8 +24,46 @@ function pin() {
 function checkPin(given) {
   const p = pin();
   if (!p) return json({ ok: false, error: 'Brak PIN-u w ustawieniach skryptu — kierownik musi go ustawić (Właściwości skryptu → PIN)' });
-  if (given !== p) return json({ ok: false, error: 'Złe hasło (TOKEN)' });
-  return null;
+  const cache = CacheService.getScriptCache();
+  if (cache.get('lockout')) return json({ ok: false, locked: true, error: 'Zbyt wiele błędnych prób PIN-u. Spróbuj ponownie za kilka minut.' });
+  if (typeof given === 'string' && given === p) return null;
+  Utilities.sleep(2000);
+  const fails = (Number(cache.get('fails')) || 0) + 1;
+  cache.put('fails', String(fails), 600);
+  if (fails >= MAX_FAILS) {
+    cache.put('lockout', '1', LOCK_MIN * 60);
+    cache.remove('fails');
+    logSecurity('Blokada na ' + LOCK_MIN + ' min: ' + fails + ' błędnych prób PIN-u w ciągu 10 minut');
+  }
+  return json({ ok: false, error: 'Złe hasło (TOKEN)' });
+}
+
+function logSecurity(msg) {
+  try {
+    const ss = SpreadsheetApp.getActive();
+    const sh = ss.getSheetByName('Bezpieczeństwo') || ss.insertSheet('Bezpieczeństwo');
+    if (sh.getLastRow() === 0) sh.appendRow(['Data', 'Zdarzenie']);
+    sh.appendRow([new Date(), msg]);
+  } catch (err) {}
+}
+
+function readItems() {
+  return json({ ok: true, items: rows('Produkty').filter(r => r[0]).map(r => ({ code: String(r[0]), name: String(r[1]), min: Number(r[2]) || 0 })) });
+}
+
+function readEntries(limitParam) {
+  const limit = Number(limitParam) || 5000;
+  const tz = Session.getScriptTimeZone();
+  const sheet = rows('Wpisy');
+  const all = sheet
+    .map((r, i) => ({ r, row: i + 2 }))
+    .filter(x => x.r[2]);
+  const out = all.slice(-limit).reverse().map(({ r, row }) => ({
+    at: r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'yyyy-MM-dd HH:mm') : String(r[0]),
+    name: String(r[1]), code: String(r[2]), qty: Number(r[3]), pp: String(r[4]), by: String(r[5]),
+    id: r[6] ? String(r[6]) : 'row-' + row, type: typeOf(r), doc: String(r[8] || '')
+  }));
+  return json({ ok: true, entries: out, stock: stockMap(sheet) });
 }
 
 function setup() {
@@ -84,27 +127,14 @@ function newId() {
   return Utilities.getUuid().slice(0, 12);
 }
 
+// Stary sposób (PIN w adresie). Zostaje tylko na czas przejścia, żeby telefony z
+// poprzednią wersją aplikacji działały do pierwszego odświeżenia. Do usunięcia później.
 function doGet(e) {
   const p = e.parameter || {};
   const bad = checkPin(p.token);
   if (bad) return bad;
-  if (p.action === 'items') {
-    return json({ ok: true, items: rows('Produkty').filter(r => r[0]).map(r => ({ code: String(r[0]), name: String(r[1]), min: Number(r[2]) || 0 })) });
-  }
-  if (p.action === 'entries') {
-    const limit = Number(p.limit) || 5000;
-    const tz = Session.getScriptTimeZone();
-    const sheet = rows('Wpisy');
-    const all = sheet
-      .map((r, i) => ({ r, row: i + 2 }))
-      .filter(x => x.r[2]);
-    const out = all.slice(-limit).reverse().map(({ r, row }) => ({
-      at: r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'yyyy-MM-dd HH:mm') : String(r[0]),
-      name: String(r[1]), code: String(r[2]), qty: Number(r[3]), pp: String(r[4]), by: String(r[5]),
-      id: r[6] ? String(r[6]) : 'row-' + row, type: typeOf(r), doc: String(r[8] || '')
-    }));
-    return json({ ok: true, entries: out, stock: stockMap(sheet) });
-  }
+  if (p.action === 'items') return readItems();
+  if (p.action === 'entries') return readEntries(p.limit);
   return json({ ok: false, error: 'Nieznana akcja' });
 }
 
@@ -113,6 +143,8 @@ function doPost(e) {
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json({ ok: false, error: 'Zły format danych' }); }
   const bad = checkPin(body.token);
   if (bad) return bad;
+  if (body.action === 'items') return readItems();
+  if (body.action === 'entries') return readEntries(body.limit);
   const ss = SpreadsheetApp.getActive();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);

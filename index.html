@@ -10,10 +10,10 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="lib/html5-qrcode.min.js"></script>
+<script src="lib/qrcode.js"></script>
 <script>
-const JSQR_URL = "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
+const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
 // PIN NIE jest zapisany w tym pliku — każdy wpisuje go raz w aplikacji.
@@ -312,11 +312,8 @@ function askPin(msg){
 function badPin(){pin="";ls.set("mqr_pin","");askPin("Zły PIN. Wpisz go jeszcze raz.")}
 
 /* API */
-async function api(action,params={}){
-  if(!SCRIPT_URL)throw new Error("Brak SCRIPT_URL w index.html");
-  if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
-  const r=await fetch(SCRIPT_URL+"?"+new URLSearchParams({action,token:pin,...params}));
-  const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
+/* odczyt też idzie POST-em: PIN jest w treści zapytania, nigdy w adresie */
+async function api(action,params={}){return post({action,...params})}
 async function post(body){
   if(!SCRIPT_URL)throw new Error("Brak SCRIPT_URL w index.html");
   if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
