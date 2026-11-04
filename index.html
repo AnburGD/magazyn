@@ -15,7 +15,7 @@
 <script>
 /* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
    Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
-const APP_VER = "20";
+const APP_VER = "21";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -309,7 +309,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       <input id="sSearch" placeholder="Szukaj produktu" autocomplete="off">
     </div>
     <div id="stanList" style="margin-top:8px"></div>
-    <div class="row" style="margin-top:16px"><button class="btn" id="stanCsv">Pobierz stany (CSV)</button></div>
+    <div class="row" style="margin-top:16px"><button class="btn" id="stanCsv">Pobierz stany do Excela</button></div>
     <p class="note">Stan = przyjęcia − wydania ± inwentaryzacja. Kliknij „min”, żeby ustawić minimalny stan — poniżej niego produkt trafia do „Do zamówienia”.</p>
   </section>
 
@@ -342,7 +342,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       <input id="invSearch" type="search" placeholder="Szukaj: numer faktury, produkt lub PP" autocomplete="off">
     </div>
     <div id="invList" style="margin-top:12px"></div>
-    <button class="btn" id="invCsv" style="margin-top:4px">Pobierz rozliczenie faktur (CSV)</button>
+    <button class="btn" id="invCsv" style="margin-top:4px">Pobierz rozliczenie faktur do Excela</button>
   </section>
 
   <section id="v-hist" hidden>
@@ -362,7 +362,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
     </div>
     <div class="label" style="margin-top:16px">Wydano wg filtra</div>
     <div class="totals" id="totals" style="margin-top:8px"></div>
-    <div class="row" style="margin:16px 0 8px"><button class="btn" id="csv">Pobierz do Excela (CSV)</button><button class="btn ghost" id="refresh">Odśwież</button></div>
+    <div class="row" style="margin:16px 0 8px"><button class="btn" id="csv">Pobierz do Excela</button><button class="btn ghost" id="refresh">Odśwież</button></div>
     <div class="scroll"><table><thead><tr><th>Produkt</th><th>PP / operacja</th><th style="text-align:right">Ilość</th><th></th></tr></thead><tbody id="histBody"></tbody></table></div>
     <div id="histEmpty" class="empty" hidden>Brak wpisów.</div>
   </section>
@@ -794,11 +794,42 @@ $("#stanList").addEventListener("click",async e=>{
     renderStany()}
 });
 $("#stanList").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.closest(".minedit")){e.target.closest(".minedit").dataset.at=0;e.target.parentElement.querySelector("[data-minok]").click()}});
+/* ===== Eksport do Excela (.xlsx) =====
+   Prawdziwy plik Excela zamiast CSV: polskie znaki działają w każdym Excelu (Windows, Mac, telefon),
+   kolumny są od razu rozdzielone, a liczby są liczbami. Bez zewnętrznych bibliotek. */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function zipStore(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;
+  const u16=n=>[n&255,(n>>>8)&255],u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+  for(const[name,text]of files){const nm=enc.encode(name),data=enc.encode(text),crc=crc32(data);
+    const loc=new Uint8Array([0x50,0x4b,3,4,...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(nm.length),...u16(0)]);
+    parts.push(loc,nm,data);
+    cd.push(new Uint8Array([0x50,0x4b,1,2,...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(nm.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),nm);
+    off+=loc.length+nm.length+data.length}
+  const cdLen=cd.reduce((a,x)=>a+x.length,0);
+  return new Blob([...parts,...cd,new Uint8Array([0x50,0x4b,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cdLen),...u32(off),0,0])],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})}
+const xmlEsc=s=>String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const colName=i=>{let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+function xlsxBlob(sheet,header,rows,widths){
+  const cell=(v,r,c,st)=>{const ref=colName(c)+r;if(v===null||v===undefined||v==="")return"";
+    return typeof v==="number"&&isFinite(v)?`<c r="${ref}"${st}><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`};
+  const all=[header,...rows],last=colName(header.length-1);
+  const data=all.map((row,i)=>`<row r="${i+1}">${row.map((v,c)=>cell(v,i+1,c,i?"":' s="1"')).join("")}</row>`).join("");
+  const cols=`<cols>${header.map((_,i)=>`<col min="${i+1}" max="${i+1}" width="${(widths&&widths[i])||14}" customWidth="1"/>`).join("")}</cols>`;
+  const ws=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${data}</sheetData><autoFilter ref="A1:${last}${all.length}"/></worksheet>`;
+  return zipStore([
+    ["[Content_Types].xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+    ["_rels/.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ["xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEsc(sheet).slice(0,31)}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${xmlEsc(sheet).slice(0,31)}'!$A$1:$${last}$${all.length}</definedName></definedNames></workbook>`],
+    ["xl/_rels/workbook.xml.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ["xl/styles.xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'],
+    ["xl/worksheets/sheet1.xml",ws]])}
+function saveXlsx(file,sheet,header,rows,widths){const a=document.createElement("a");a.href=URL.createObjectURL(xlsxBlob(sheet,header,rows,widths));
+  a.download=file+"-"+dayStr(new Date())+".xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+
 $("#stanCsv").onclick=()=>{if(!items.length)return toast("Brak produktów",true);
-  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
-  const csv="\ufeff"+["Produkt;Kod;Stan;Min;Do zamówienia",...items.map(i=>{const st=stanOf(i.code);return[i.name,i.code,st,i.min||"",isLow(i)?i.min-st:""].map(q).join(";")})].join("\r\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="stany-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+  saveXlsx("stany","Stany",["Produkt","Kod","Stan","Min","Do zamówienia"],
+    items.map(i=>{const st=stanOf(i.code);return[i.name,i.code,st,i.min||"",isLow(i)?i.min-st:""]}),[28,22,10,8,14])};
 
 /* usuwanie wpisu z potwierdzeniem */
 $("#histBody").addEventListener("click",async ev=>{
@@ -815,10 +846,10 @@ $("#histBody").addEventListener("click",async ev=>{
 $("#csv").onclick=()=>{
   const l=histList();
   if(!l.length)return toast("Brak wpisów do pobrania",true);
-  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
-  const csv="\ufeff"+["Data;Operacja;Produkt;Kod;PP;Ilość;Dokument;Kto",...l.map(e=>[e.at,{W:"Wydanie",P:"Przyjęcie",K:"Korekta"}[e.type],e.name,e.code,e.pp,e.qty,e.doc,e.by].map(q).join(";"))].join("\r\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="magazyn-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+  saveXlsx("magazyn","Historia",["Data","Operacja","Produkt","Kod","PP","Ilość","Dokument","Faktura","Kto"],
+    l.map(e=>{const a=allocOf.get(e.id);return[e.at,{W:"Wydanie",P:"Przyjęcie",K:"Korekta"}[e.type],e.name,e.code,e.pp,e.qty,e.doc,
+      a?a.list.map(x=>a.list.length>1||a.free?`${x.doc} (${x.qty})`:x.doc).join(", ")+(a.free?`, bez faktury (${a.free})`:""):"",e.by]}),
+    [17,12,26,20,10,8,22,24,14])};
 $("#refresh").onclick=()=>{loadEntries();toast("Odświeżono")};
 
 /* ===== Faktury: rozliczanie wydań na faktury (FIFO) =====
@@ -865,12 +896,9 @@ $("#invFilter").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;in
   $("#invFilter").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderInvoices()};
 $("#invSearch").oninput=renderInvoices;
 $("#invCsv").onclick=()=>{if(!invoices.length)return toast("Brak faktur",true);
-  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
   const rows=[];invoices.forEach(inv=>inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty);
-    rows.push([inv.doc,inv.at,x.name,x.code,x.qty,u,x.qty-u,inv.closed?"Zamknięta":"Otwarta",x.allocs.map(a=>`PP ${a.pp}: ${a.qty}`).join(", ")].map(q).join(";"))}));
-  const csv="\ufeff"+["Faktura;Data;Produkt;Kod;Na fakturze;Wydano;Zostało;Status;Wydania",...rows].join("\r\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="faktury-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+    rows.push([inv.doc,inv.at,x.name,x.code,x.qty,u,x.qty-u,inv.closed?"Zamknięta":"Otwarta",x.allocs.map(a=>`PP ${a.pp}: ${a.qty}`).join(", ")])}));
+  saveXlsx("faktury","Faktury",["Faktura","Data","Produkt","Kod","Na fakturze","Wydano","Zostało","Status","Wydania"],rows,[18,17,26,20,12,10,10,12,40])};
 
 /* --- nowa faktura (kilka produktów naraz) --- */
 let invEd=null;
