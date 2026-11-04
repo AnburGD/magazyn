@@ -51,7 +51,8 @@ h2{font-family:var(--display);font-weight:700;font-size:22px;text-transform:uppe
 .scanview video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .aim{--c:#f5c22b;position:absolute;left:50%;top:50%;width:min(70vw,70vh);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:10px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);
   background:linear-gradient(var(--c),var(--c)) 0 0/44px 5px,linear-gradient(var(--c),var(--c)) 0 0/5px 44px,linear-gradient(var(--c),var(--c)) 100% 0/44px 5px,linear-gradient(var(--c),var(--c)) 100% 0/5px 44px,
-  linear-gradient(var(--c),var(--c)) 0 100%/44px 5px,linear-gradient(var(--c),var(--c)) 0 100%/5px 44px,linear-gradient(var(--c),var(--c)) 100% 100%/44px 5px,linear-gradient(var(--c),var(--c)) 100% 100%/5px 44px;background-repeat:no-repeat}
+  linear-gradient(var(--c),var(--c)) 0 100%/44px 5px,linear-gradient(var(--c),var(--c)) 0 100%/5px 44px,linear-gradient(var(--c),var(--c)) 100% 100%/44px 5px,linear-gradient(var(--c),var(--c)) 100% 100%/5px 44px;background-repeat:no-repeat;transition:box-shadow .15s}
+.aim.lock{--c:#3ddc84;box-shadow:0 0 0 100vmax rgba(0,0,0,.35),inset 0 0 0 3px #3ddc84}
 .scantop{position:relative;padding:calc(18px + env(safe-area-inset-top)) 16px 28px;text-align:center;font-weight:600;font-size:17px;background:linear-gradient(rgba(0,0,0,.65),transparent)}
 .scanbot{position:relative;margin-top:auto;padding:28px max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px;background:linear-gradient(transparent,rgba(0,0,0,.75))}
 .zoomrow{display:flex;align-items:center;gap:12px;font:600 14px var(--body)}
@@ -374,13 +375,16 @@ $("#pAdd").onclick=async()=>{const name=$("#pName").value.trim();if(!name)return
 
 /* skaner — pełny ekran; kadr w wysokiej rozdzielczości, żeby łapał kody z daleka */
 let stream=null,track=null,detector,jsqrCanvas=null,frameN=0,torchOn=false;
+/* Ochrona przed zbyt szybkim skanem: kod musi być w ramce i trzymać się przez chwilę */
+const SCAN_WARMUP=500,SCAN_HOLD=400,SCAN_HITS=3,SCAN_LOST=700;
+let scanStart=0,cand=null;
 const scanErr=t=>{$("#scanMsg").textContent=t;$("#scanMsg").hidden=false};
 function loadJsQR(){return window.jsQR?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement("script");s.src=JSQR_URL;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
 async function getDetector(){if(!("BarcodeDetector" in window))return null;
   try{return(await BarcodeDetector.getSupportedFormats()).includes("qr_code")?new BarcodeDetector({formats:["qr_code"]}):null}catch{return null}}
 async function startScan(){
   if(scanning)return;
-  $("#scanMsg").hidden=true;scanning=true;frameN=0;
+  $("#scanMsg").hidden=true;scanning=true;frameN=0;cand=null;$(".aim").classList.remove("lock");
   $("#scanView").hidden=false;document.body.style.overflow="hidden";history.pushState({scan:1},"");
   try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}}})}
   catch{if(scanning){stopScan();scanErr("Nie udało się włączyć kamery. Zezwól przeglądarce na dostęp do aparatu albo użyj „Zrób zdjęcie kodu”.")}return}
@@ -391,7 +395,7 @@ async function startScan(){
     if(!detector)await loadJsQR()}
   catch{if(scanning){stopScan();scanErr("Nie udało się uruchomić skanera. Sprawdź internet albo użyj „Zrób zdjęcie kodu”.")}return}
   if(!scanning)return;
-  camControls();tick()}
+  camControls();scanStart=performance.now();tick()}
 function camControls(){
   let caps={};try{caps=track.getCapabilities?track.getCapabilities():{}}catch{}
   if(caps.focusMode&&caps.focusMode.includes("continuous"))track.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
@@ -401,12 +405,29 @@ function camControls(){
 function zoomLbl(){$("#zoomVal").textContent=Number($("#zoom").value).toFixed(1)+"×"}
 $("#zoom").oninput=()=>{if(track)track.applyConstraints({advanced:[{zoom:Number($("#zoom").value)}]}).catch(()=>{});zoomLbl()};
 $("#torch").onclick=()=>{torchOn=!torchOn;if(track)track.applyConstraints({advanced:[{torch:torchOn}]}).catch(()=>{});$("#torch").setAttribute("aria-pressed",torchOn)};
+async function readCode(v){
+  if(detector){const rs=await detector.detect(v);
+    // przy kilku kodach w kadrze bierzemy ten najbliżej środka ramki
+    let best=null;for(const r of rs){const b=r.boundingBox,c={data:r.rawValue,cx:b.x+b.width/2,cy:b.y+b.height/2};
+      if(inAim(v,c.cx,c.cy)&&(!best||dist(v,c)<dist(v,best)))best=c}
+    return best}
+  const r=readJsQR(v);return r&&inAim(v,r.cx,r.cy)?r:null}
+function dist(v,c){return Math.hypot(c.cx-v.videoWidth/2,c.cy-v.videoHeight/2)}
+// czy środek kodu (w pikselach wideo) leży w żółtej ramce na ekranie (wideo ma object-fit: cover)
+function inAim(v,cx,cy){const W=v.clientWidth,H=v.clientHeight,k=Math.max(W/v.videoWidth,H/v.videoHeight);
+  const x=(W-v.videoWidth*k)/2+cx*k,y=(H-v.videoHeight*k)/2+cy*k,vr=v.getBoundingClientRect(),a=$(".aim").getBoundingClientRect();
+  return x+vr.left>=a.left&&x+vr.left<=a.right&&y+vr.top>=a.top&&y+vr.top<=a.bottom}
 async function tick(){
   if(!scanning)return;
-  const v=$("#cam");let code=null;
-  if(v.readyState>=2&&v.videoWidth){try{code=detector?((await detector.detect(v))[0]||{}).rawValue:readJsQR(v)}catch{}}
+  const v=$("#cam"),now=performance.now();let hit=null;
+  if(v.readyState>=2&&v.videoWidth&&now-scanStart>=SCAN_WARMUP){try{hit=await readCode(v)}catch{}}
   if(!scanning)return;
-  if(code){stopScan();if(navigator.vibrate)navigator.vibrate(80);openCode(code);return}
+  if(hit){
+    if(cand&&cand.code===hit.data){cand.hits++;cand.last=now}
+    else cand={code:hit.data,first:now,last:now,hits:1};
+    $(".aim").classList.add("lock");
+    if(cand.hits>=SCAN_HITS&&now-cand.first>=SCAN_HOLD){const code=cand.code;cand=null;stopScan();if(navigator.vibrate)navigator.vibrate(80);openCode(code);return}
+  }else if(cand&&now-cand.last>SCAN_LOST){cand=null;$(".aim").classList.remove("lock")}
   setTimeout(tick,detector?50:20)}
 function readJsQR(v){
   const vw=v.videoWidth,vh=v.videoHeight,c=jsqrCanvas||(jsqrCanvas=document.createElement("canvas")),x=c.getContext("2d",{willReadFrequently:true});
@@ -416,10 +437,13 @@ function readJsQR(v){
   else{const k=Math.min(1,800/Math.max(vw,vh));dw=Math.round(vw*k);dh=Math.round(vh*k)}
   c.width=dw;c.height=dh;x.drawImage(v,sx,sy,sw,sh,0,0,dw,dh);
   const r=jsQR(x.getImageData(0,0,dw,dh).data,dw,dh,{inversionAttempts:"dontInvert"});
-  return r&&r.data}
+  if(!r)return null;
+  // środek kodu z powrotem w pikselach wideo
+  const L=r.location,px=(L.topLeftCorner.x+L.topRightCorner.x+L.bottomLeftCorner.x+L.bottomRightCorner.x)/4,py=(L.topLeftCorner.y+L.topRightCorner.y+L.bottomLeftCorner.y+L.bottomRightCorner.y)/4;
+  return{data:r.data,cx:sx+px*sw/dw,cy:sy+py*sh/dh}}
 function stopScan(fromHistory){
   if(!scanning&&$("#scanView").hidden)return;
-  scanning=false;
+  scanning=false;cand=null;$(".aim").classList.remove("lock");
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}track=null;
   const v=$("#cam");v.pause();v.srcObject=null;
   $("#scanView").hidden=true;document.body.style.overflow="";
