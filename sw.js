@@ -1,6 +1,6 @@
 // Service worker: szybkie uruchamianie i działanie ekranu bez sieci.
 // Dane (produkty, wpisy) zawsze idą do Google Sheets, więc do zapisu potrzebny jest internet.
-const CACHE = "magazyn-qr-v8";
+const CACHE = "magazyn-qr-v9";
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png",
   "./lib/html5-qrcode.min.js", "./lib/qrcode.js", "./lib/jsQR.js"];
 

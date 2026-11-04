@@ -103,16 +103,9 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
 .kpi b{display:block;font:700 28px var(--display);line-height:1.1;font-variant-numeric:tabular-nums}
 .kpi span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.grp{border-bottom:1px solid var(--line)}
-.grp summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px 2px;cursor:pointer}
-.grp summary::-webkit-details-marker{display:none}
-.grp summary::before{content:"›";font-size:22px;color:var(--muted);width:12px;transition:transform .15s}
-.grp[open] summary::before{transform:rotate(90deg)}
-.grp .gname{flex:1;min-width:0;font-weight:600}
-.grp .gsub{font-size:13px;color:var(--muted);font-weight:400}
-.grp .gq{font:600 18px var(--mono);white-space:nowrap}
-.grp table{margin:0 0 12px 22px;width:calc(100% - 22px)}
-.grp td{padding:7px 6px}
+.dates{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dates label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.dates input{font-family:var(--mono)}
 .stats{background:var(--bg);border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .stats .top{display:flex;justify-content:space-between;gap:8px;font-size:14px}
 .stats .pps{display:flex;flex-wrap:wrap;gap:6px}
@@ -146,7 +139,6 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
     <nav>
       <button data-v="scan" aria-selected="true">Skanuj</button>
       <button data-v="stan" aria-selected="false">Stany<span class="dot" id="lowDot" hidden></span></button>
-      <button data-v="rep" aria-selected="false">Raport</button>
       <button data-v="hist" aria-selected="false">Historia</button>
       <button data-v="prod" aria-selected="false">Produkty</button>
     </nav>
@@ -233,31 +225,20 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
     <p class="note">Stan = przyjęcia − wydania ± inwentaryzacja. Kliknij „min”, żeby ustawić minimalny stan — poniżej niego produkt trafia do „Do zamówienia”.</p>
   </section>
 
-  <section id="v-rep" hidden>
-    <h2>Raport</h2>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div class="seg" id="period">
-        <button data-p="today" aria-pressed="false">Dziś</button>
-        <button data-p="7" aria-pressed="false">7 dni</button>
-        <button data-p="30" aria-pressed="false">30 dni</button>
-        <button data-p="all" aria-pressed="true">Wszystko</button>
-      </div>
-      <div class="seg" id="group">
-        <button data-g="prod" aria-pressed="true">Wg produktu</button>
-        <button data-g="pp" aria-pressed="false">Wg PP</button>
-      </div>
-      <input id="rSearch" placeholder="Szukaj produktu lub numeru PP" autocomplete="off">
-      <div class="kpis" id="kpi"></div>
-    </div>
-    <div id="repList" style="margin-top:8px"></div>
-  </section>
-
   <section id="v-hist" hidden>
     <h2>Historia</h2>
     <div class="filters">
       <input id="fPP" placeholder="Filtruj PP" inputmode="numeric">
       <select id="fItem"><option value="">Wszystkie produkty</option></select>
       <select id="fType" style="grid-column:1/-1"><option value="">Wszystkie operacje</option><option value="W">Wydania</option><option value="P">Przyjęcia</option><option value="K">Inwentaryzacje</option></select>
+    </div>
+    <div class="dates" style="margin-top:8px">
+      <label><span class="label">Od dnia</span><input id="fFrom" type="date"></label>
+      <label><span class="label">Do dnia</span><input id="fTo" type="date"></label>
+    </div>
+    <div class="seg" id="hSort" style="margin-top:8px">
+      <button data-s="desc" aria-pressed="true">Najnowsze najpierw</button>
+      <button data-s="asc" aria-pressed="false">Najstarsze najpierw</button>
     </div>
     <div class="label" style="margin-top:16px">Wydano wg filtra</div>
     <div class="totals" id="totals" style="margin-top:8px"></div>
@@ -326,7 +307,7 @@ async function loadEntries(){try{const j=await api("entries",{limit:5000});
 /* zakładki */
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
-  ["scan","stan","rep","hist","prod"].forEach(k=>$("#v-"+k).hidden=k!==b.dataset.v);
+  ["scan","stan","hist","prod"].forEach(k=>$("#v-"+k).hidden=k!==b.dataset.v);
   if(b.dataset.v!=="scan")stopScan();if(b.dataset.v!=="scan"&&b.dataset.v!=="prod")loadEntries()});
 
 /* widoki */
@@ -340,14 +321,24 @@ const stanOf=code=>stock[code]||0;
 function renderRecent(){const l=entries.slice(0,6);
   $("#recent").innerHTML=l.length?`<div class="scroll"><table><tbody>${l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">${opCell(e)}</td><td class="n">${qtyCell(e)} szt.</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Tu pojawią się zapisane wpisy.</div>`}
 function renderFilter(){const s=$("#fItem"),v=s.value;s.innerHTML='<option value="">Wszystkie produkty</option>'+items.map(i=>`<option value="${esc(i.code)}">${esc(i.name)}</option>`).join("");s.value=v}
+let histSort="desc";
 const histList=()=>{const pp=$("#fPP").value.trim(),it=$("#fItem").value,ty=$("#fType").value;
-  return entries.filter(e=>(!pp||(e.type==="W"&&e.pp.includes(pp)))&&(!it||e.code===it)&&(!ty||e.type===ty))};
+  let from=$("#fFrom").value,to=$("#fTo").value;if(from&&to&&from>to)[from,to]=[to,from];
+  const l=entries.map((e,i)=>({e,i})).filter(({e})=>(!pp||(e.type==="W"&&e.pp.includes(pp)))&&(!it||e.code===it)&&(!ty||e.type===ty)
+    &&(!from||e.at.slice(0,10)>=from)&&(!to||e.at.slice(0,10)<=to));
+  /* wpisy przychodzą od najnowszych; przy równej dacie zachowujemy kolejność zapisu */
+  l.sort((a,b)=>a.e.at<b.e.at?-1:a.e.at>b.e.at?1:b.i-a.i);
+  if(histSort==="desc")l.reverse();
+  return l.map(x=>x.e)};
 function renderHist(){const l=histList();
   $("#histEmpty").hidden=l.length>0;
   $("#histBody").innerHTML=l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">${opCell(e)}</td><td class="n">${qtyCell(e)}</td><td><button class="del" data-del="${esc(e.id)}" aria-label="Usuń wpis">✕</button></td></tr>`).join("");
   const t={};l.filter(e=>e.type==="W").forEach(e=>t[e.name]=(t[e.name]||0)+e.qty);
   $("#totals").innerHTML=Object.entries(t).map(([n,q])=>`<span class="chip">${esc(n)}<b>${q}</b></span>`).join("")||'<span class="note">—</span>'}
 $("#fPP").oninput=renderHist;$("#fItem").onchange=renderHist;$("#fType").onchange=renderHist;
+$("#fFrom").onchange=renderHist;$("#fTo").onchange=renderHist;
+$("#hSort").onclick=e=>{const b=e.target.closest("[data-s]");if(!b)return;histSort=b.dataset.s;
+  $("#hSort").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderHist()};
 function renderProd(){$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button><button class="del" data-delitem="${esc(i.code)}" data-nm="${esc(i.name)}" aria-label="Usuń produkt">✕</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
 
 /* naklejka QR */
@@ -478,36 +469,11 @@ $("#saveEntries").onclick=async()=>{if(!current)return;
   finally{b.disabled=false;b.textContent=SAVE_LBL[mode]}};
 
 /* ===== wyświetlanie danych w aplikacji ===== */
-let period="all",group="prod";
-function renderEntries(){renderRecent();renderHist();renderReport();renderStany();if(current){renderItemStats();updSum()}}
+function renderEntries(){renderRecent();renderHist();renderStany();if(current){renderItemStats();updSum()}}
 const pad2=n=>String(n).padStart(2,"0");
 const dayStr=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
-function inPeriod(e){if(period==="all")return true;const d=new Date();
-  if(period!=="today")d.setDate(d.getDate()-Number(period)+1);return e.at.slice(0,10)>=dayStr(d)}
 const fmtQ=n=>n.toLocaleString("pl-PL");
 
-function renderReport(){
-  const q=$("#rSearch").value.trim().toLowerCase();
-  const list=entries.filter(e=>e.type==="W").filter(inPeriod).filter(e=>!q||e.name.toLowerCase().includes(q)||e.pp.toLowerCase().includes(q));
-  const total=list.reduce((a,e)=>a+e.qty,0),pps=new Set(list.map(e=>e.pp)).size;
-  $("#kpi").innerHTML=`<div class="kpi"><b>${fmtQ(total)}</b><span>wydanych szt.</span></div><div class="kpi"><b>${fmtQ(pps)}</b><span>numerów PP</span></div><div class="kpi"><b>${fmtQ(list.length)}</b><span>wpisów</span></div>`;
-  const key=group==="prod"?"name":"pp",sub=group==="prod"?"pp":"name";
-  const g=new Map();
-  list.forEach(e=>{const k=e[key];if(!g.has(k))g.set(k,{total:0,parts:new Map()});const o=g.get(k);o.total+=e.qty;o.parts.set(e[sub],(o.parts.get(e[sub])||0)+e.qty)});
-  const groups=[...g.entries()].sort((a,b)=>b[1].total-a[1].total);
-  if(!groups.length){$("#repList").innerHTML=`<div class="empty">${entries.length?"Brak wpisów dla tego filtra.":"Brak wpisów. Zeskanuj kod, żeby dodać pierwszy."}</div>`;return}
-  $("#repList").innerHTML=groups.map(([k,o])=>{
-    const parts=[...o.parts.entries()].sort((a,b)=>b[1]-a[1]);
-    const title=group==="prod"?esc(k):"PP "+esc(k);
-    const n=parts.length,pl=(n%10>=2&&n%10<=4&&(n%100<12||n%100>14))?"produkty":"produktów";const subTxt=group==="prod"?`na ${n} PP`:`${n} ${n===1?"produkt":pl}`;
-    return `<details class="grp"><summary><span class="gname">${title}<div class="gsub">${subTxt}</div></span><span class="gq">${fmtQ(o.total)} szt.</span></summary>
-      <table><tbody>${parts.map(([s,n])=>`<tr><td class="${group==="prod"?"ppc":""}">${group==="prod"?"PP "+esc(s):esc(s)}</td><td class="n">${fmtQ(n)} szt.</td></tr>`).join("")}</tbody></table></details>`}).join("");
-}
-$("#period").onclick=e=>{const b=e.target.closest("[data-p]");if(!b)return;period=b.dataset.p;
-  $("#period").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderReport()};
-$("#group").onclick=e=>{const b=e.target.closest("[data-g]");if(!b)return;group=b.dataset.g;
-  $("#group").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderReport()};
-$("#rSearch").oninput=renderReport;
 
 function renderItemStats(){
   const st=stanOf(current.code),low=current.min>0&&st<current.min;
