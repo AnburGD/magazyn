@@ -93,6 +93,14 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
 .totals{display:flex;flex-wrap:wrap;gap:8px}
 .chip{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:6px 10px;font-size:14px}
 .chip b{font-family:var(--mono);margin-left:6px}
+.pick{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.picklist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--surface);max-height:320px;overflow-y:auto}
+.picklist button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:13px 14px;color:var(--fg);font:500 16px var(--body);cursor:pointer;min-height:48px}
+.picklist button:last-child{border-bottom:0}
+.picklist button:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.picklist .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picklist .ps{font:500 13px var(--mono);color:var(--muted);white-space:nowrap}
+.picklist .none{padding:14px;color:var(--muted);font-size:14px}
 .prod{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
 .prod .meta{flex:1;min-width:0}
 .prod .nm{font-weight:600}
@@ -165,6 +173,11 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       <input id="manual" placeholder="lub wpisz kod / skaner ręczny" autocomplete="off">
       <button class="btn" id="manualGo">OK</button>
     </div>
+    <div class="pick">
+      <label class="label" for="pickQ">lub wybierz produkt z listy</label>
+      <input id="pickQ" type="search" placeholder="Szukaj produktu po nazwie" autocomplete="off">
+      <div class="picklist" id="pickList" role="listbox" aria-label="Produkty" hidden></div>
+    </div>
     <label class="note" style="display:block;margin-top:8px">Kamera nie działa? <span style="text-decoration:underline">Zrób zdjęcie kodu</span>
       <input id="photo" type="file" accept="image/*" capture="environment" style="position:absolute;opacity:0;width:1px;height:1px"></label>
     <div id="scanMsg" class="msg" hidden></div>
@@ -178,7 +191,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
 
     <div id="itemPanel" class="panel" style="margin-top:20px" hidden>
       <div class="item-head">
-        <div><div class="label">Zeskanowano</div><div class="item-name" id="itemName"></div><div class="code" id="itemCode"></div></div>
+        <div><div class="label" id="itemLbl">Zeskanowano</div><div class="item-name" id="itemName"></div><div class="code" id="itemCode"></div></div>
         <button class="btn ghost" id="itemClose" aria-label="Zamknij">✕</button>
       </div>
       <div class="stats" id="itemStats"></div>
@@ -300,7 +313,7 @@ async function post(body){
   if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
   const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({...body,token:pin})});
   const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
-async function loadItems(){try{items=(await api("items")).items.map(i=>({...i,min:i.min||0}));renderProd();renderFilter();renderStany()}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
+async function loadItems(){try{items=(await api("items")).items.map(i=>({...i,min:i.min||0}));renderProd();renderFilter();renderStany();renderPick()}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
 async function loadEntries(){try{const j=await api("entries",{limit:5000});
   entries=j.entries.map(e=>({...e,type:e.type||"W",doc:e.doc||""}));stock=j.stock||calcStock(entries);renderEntries()}catch(e){$("#recent").innerHTML=`<div class="empty">${e.pin?"Wpisz PIN, żeby zobaczyć wpisy.":esc(e.message)}</div>`}}
 
@@ -421,9 +434,32 @@ $("#photo").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f
 $("#manualGo").onclick=()=>{const v=$("#manual").value.trim();if(v){openCode(v);$("#manual").value=""}};
 $("#manual").onkeydown=e=>{if(e.key==="Enter")$("#manualGo").click()};
 
-function openCode(code){code=code.trim();$("#scanMsg").hidden=true;
+/* wybór produktu z listy — bez skanowania i bez znajomości kodu */
+function renderPick(){const box=$("#pickList");if(box.hidden)return;
+  const q=$("#pickQ").value.trim().toLowerCase();
+  const l=items.filter(i=>!q||i.name.toLowerCase().includes(q)||i.code.toLowerCase().includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+  box.innerHTML=l.length?l.map(i=>`<button type="button" role="option" data-pick="${esc(i.code)}"><span class="pn">${esc(i.name)}</span><span class="ps">${fmtQ(stock[i.code]||0)} szt.</span></button>`).join("")
+    :`<div class="none">${items.length?"Nie znaleziono produktu „"+esc($("#pickQ").value.trim())+"”":"Brak produktów. Dodaj je w zakładce „Produkty”."}</div>`}
+function openPick(){$("#pickList").hidden=false;renderPick()}
+function closePick(){$("#pickList").hidden=true}
+$("#pickQ").onfocus=openPick;$("#pickQ").oninput=openPick;
+$("#pickQ").onkeydown=e=>{if(e.key==="Escape"){closePick();e.target.blur()}
+  if(e.key==="Enter"){const f=$("#pickList [data-pick]");if(f)f.click()}
+  if(e.key==="ArrowDown"){const f=$("#pickList [data-pick]");if(f){e.preventDefault();f.focus()}}};
+$("#pickList").addEventListener("keydown",e=>{const b=e.target.closest("[data-pick]");if(!b)return;
+  if(e.key==="ArrowDown"&&b.nextElementSibling){e.preventDefault();b.nextElementSibling.focus()}
+  if(e.key==="ArrowUp"){e.preventDefault();(b.previousElementSibling||$("#pickQ")).focus()}
+  if(e.key==="Escape"){closePick();$("#pickQ").focus()}});
+$("#pickList").addEventListener("click",e=>{const b=e.target.closest("[data-pick]");if(!b)return;
+  $("#pickQ").value="";closePick();openCode(b.dataset.pick,"list");
+  $("#itemPanel").scrollIntoView({behavior:"smooth",block:"start"})});
+document.addEventListener("click",e=>{if(!e.target.closest(".pick"))closePick()});
+
+function openCode(code,src){code=code.trim();$("#scanMsg").hidden=true;closePick();
   const it=items.find(i=>i.code===code);
   if(!it){$("#itemPanel").hidden=true;$("#newItem").hidden=false;$("#newCode").textContent=code;$("#newItem").dataset.code=code;$("#newName").value="";$("#newName").focus();return}
+  $("#itemLbl").textContent=src==="list"?"Wybrano z listy":"Zeskanowano";
   $("#newItem").hidden=true;current=it;$("#itemName").textContent=it.name;$("#itemCode").textContent=it.code;
   $("#lines").innerHTML="";addLine();$("#rQty").value="";$("#rDoc").value="";$("#kQty").value="";
   setMode(mode);renderItemStats();$("#itemPanel").hidden=false;focusMode()}
@@ -469,7 +505,7 @@ $("#saveEntries").onclick=async()=>{if(!current)return;
   finally{b.disabled=false;b.textContent=SAVE_LBL[mode]}};
 
 /* ===== wyświetlanie danych w aplikacji ===== */
-function renderEntries(){renderRecent();renderHist();renderStany();if(current){renderItemStats();updSum()}}
+function renderEntries(){renderRecent();renderHist();renderStany();renderPick();if(current){renderItemStats();updSum()}}
 const pad2=n=>String(n).padStart(2,"0");
 const dayStr=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
 const fmtQ=n=>n.toLocaleString("pl-PL");
