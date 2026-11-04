@@ -15,7 +15,7 @@
 <script>
 /* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
    Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
-const APP_VER = "17";
+const APP_VER = "18";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -110,6 +110,22 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
 .picklist .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .picklist .ps{font:500 13px var(--mono);color:var(--muted);white-space:nowrap}
 .picklist .none{padding:14px;color:var(--muted);font-size:14px}
+.setrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.setrow .meta{flex:1;min-width:0}
+.setrow .nm{font-weight:600}
+.setline{display:grid;grid-template-columns:1fr 76px 40px;gap:8px;align-items:center}
+.setline .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.setline .x{border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer;height:40px}
+.setchips{display:flex;flex-wrap:wrap;gap:8px}
+.setchips button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:999px;padding:9px 14px;font:600 15px var(--body);cursor:pointer}
+.setchips button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.issline{display:grid;grid-template-columns:28px 1fr 76px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.issline:last-child{border-bottom:0}
+.issline input[type=checkbox]{width:22px;height:22px;accent-color:var(--fg)}
+.issline .nm{min-width:0}
+.issline .nm b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.issline.off .nm,.issline.off .qty{opacity:.4}
+.issline .short{color:var(--err)}
 .prod{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
 .prod .meta{flex:1;min-width:0}
 .prod .nm{font-weight:600}
@@ -191,6 +207,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       <input id="pickQ" type="search" placeholder="Szukaj produktu po nazwie" autocomplete="off">
       <div class="picklist" id="pickList" role="listbox" aria-label="Produkty" hidden></div>
     </div>
+    <button class="btn" id="issueBtn" style="margin-top:12px;width:100%">Wydaj zestaw</button>
     <label class="note" style="display:block;margin-top:8px">Kamera nie działa? <span style="text-decoration:underline">Zrób zdjęcie kodu</span>
       <input id="photo" type="file" accept="image/*" capture="environment" style="position:absolute;opacity:0;width:1px;height:1px"></label>
     <div id="scanMsg" class="msg" hidden></div>
@@ -232,6 +249,18 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       </div>
       <div class="sum" id="sum"></div>
       <button class="btn primary big" id="saveEntries">Zapisz wydanie</button>
+    </div>
+
+    <div id="issuePanel" class="panel" style="margin-top:20px" hidden>
+      <div class="item-head">
+        <div><div class="label">Wydanie zestawu</div><div class="item-name" id="issueName">Zestaw</div></div>
+        <button class="btn ghost" id="issueClose" aria-label="Zamknij">✕</button>
+      </div>
+      <div class="setchips" id="issueSets" role="group" aria-label="Wybierz zestaw"></div>
+      <div id="issueLines"></div>
+      <div class="pp"><input id="issuePP" inputmode="numeric" placeholder="Numer PP dla całego zestawu" aria-label="Numer PP"></div>
+      <div class="sum" id="issueSum"></div>
+      <button class="btn primary big" id="issueSave">Zapisz wydanie zestawu</button>
     </div>
 
     <h2>Ostatnie wpisy</h2>
@@ -283,6 +312,26 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       <div class="row"><input id="pName" placeholder="Nazwa, np. Zegar"><button class="btn primary" id="pAdd">Dodaj</button></div>
     </div>
     <div id="prodList" style="margin-top:12px"></div>
+
+    <h2>Zestawy</h2>
+    <p class="note">Zestaw to lista produktów, które zwykle wydajesz razem, np. na jeden punkt. Wydasz go jednym zapisem w zakładce „Skanuj” → „Wydaj zestaw”.</p>
+    <button class="btn" id="setNew">+ Nowy zestaw</button>
+    <div id="setEditor" class="panel" style="margin-top:12px" hidden>
+      <div class="item-head">
+        <div class="label" id="setEdTitle">Nowy zestaw</div>
+        <button class="btn ghost" id="setEdClose" aria-label="Zamknij">✕</button>
+      </div>
+      <input id="setName" placeholder="Nazwa, np. Zestaw Anton" maxlength="60" autocomplete="off">
+      <div class="setline"><span class="label">Produkt</span><span class="label">Ilość</span><span></span></div>
+      <div class="lines" id="setLines"></div>
+      <div class="pick" style="margin-top:0">
+        <input id="setQ" type="search" placeholder="Dodaj produkt — szukaj po nazwie" autocomplete="off">
+        <div class="picklist" id="setPick" role="listbox" aria-label="Produkty" hidden></div>
+      </div>
+      <button class="btn primary big" id="setSave">Zapisz zestaw</button>
+      <div id="setDelBox"><button class="btn ghost" id="setDel" style="width:100%">Usuń zestaw</button></div>
+    </div>
+    <div id="setList" style="margin-top:12px"></div>
   </section>
 </main>
 
@@ -292,7 +341,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let items=[],entries=[],stock={},current=null,scanner=null,scanning=false,mode="W";
+let items=[],entries=[],stock={},sets=[],current=null,scanner=null,scanning=false,mode="W";
 const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
 let me=ls.get("mqr_name")||"";
 
@@ -335,7 +384,7 @@ function keepOpen(el){return refreshing&&!!el.querySelector(".confirm:not(.busy)
 /* Przyciski potwierdzenia pojawiają się pod palcem — ignorujemy dotknięcia w pierwszych 450 ms (podwójne tapnięcie) */
 const ARM_MS=450;
 const armed=b=>{const box=b.closest("[data-at]");return !box||Date.now()-Number(box.dataset.at)>=ARM_MS};
-async function loadItems(){try{items=(await api("items")).items.map(i=>({...i,min:i.min||0}));refreshing=true;try{renderProd();renderFilter();renderStany();renderPick()}finally{refreshing=false}}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
+async function loadItems(){try{const j=await api("items");items=j.items.map(i=>({...i,min:i.min||0}));sets=j.sets||[];refreshing=true;try{renderProd();renderFilter();renderStany();renderPick();renderSets();renderIssueSets()}finally{refreshing=false}}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
 async function loadEntries(){try{const j=await api("entries",{limit:5000});
   entries=j.entries.map(e=>({...e,type:e.type||"W",doc:e.doc||""}));stock=j.stock||calcStock(entries);refreshing=true;try{renderEntries()}finally{refreshing=false}}catch(e){$("#recent").innerHTML=`<div class="empty">${e.pin?"Wpisz PIN, żeby zobaczyć wpisy.":esc(e.message)}</div>`}}
 
@@ -349,7 +398,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
 /* wpisy mają typ: W = wydanie (na PP), P = przyjęcie, K = korekta z inwentaryzacji (ilość ze znakiem) */
 const sgn=n=>(n>0?"+":n<0?"−":"±")+fmtQ(Math.abs(n));
 function opCell(e){return e.type==="P"?`<span class="tag P">Przyjęcie</span>${e.doc?`<div class="sub">${esc(e.doc)}</div>`:""}`
-  :e.type==="K"?`<span class="tag K">Inwentaryzacja</span><div class="sub">${esc(e.doc)}</div>`:"PP "+esc(e.pp)}
+  :e.type==="K"?`<span class="tag K">Inwentaryzacja</span><div class="sub">${esc(e.doc)}</div>`:"PP "+esc(e.pp)+(e.doc?`<div class="sub">${esc(e.doc)}</div>`:"")}
 const qtyCell=e=>e.type==="W"?fmtQ(e.qty):sgn(e.qty);
 function calcStock(l){const m={};l.forEach(e=>m[e.code]=(m[e.code]||0)+(e.type==="W"?-e.qty:e.qty));return m}
 const stanOf=code=>stock[code]||0;
@@ -580,7 +629,7 @@ $("#pickList").addEventListener("click",e=>{const b=e.target.closest("[data-pick
   $("#itemPanel").scrollIntoView({behavior:"smooth",block:"start"})});
 document.addEventListener("click",e=>{if(!e.target.closest(".pick"))closePick()});
 
-function openCode(code,src){code=code.trim();$("#scanMsg").hidden=true;closePick();
+function openCode(code,src){code=code.trim();$("#scanMsg").hidden=true;closePick();$("#issuePanel").hidden=true;
   const it=items.find(i=>i.code===code);
   if(!it){$("#itemPanel").hidden=true;$("#newItem").hidden=false;$("#newCode").textContent=code;$("#newItem").dataset.code=code;$("#newName").value="";$("#newName").focus();return}
   $("#itemLbl").textContent=src==="list"?"Wybrano z listy":"Zeskanowano";
@@ -705,6 +754,106 @@ $("#csv").onclick=()=>{
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download="magazyn-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 $("#refresh").onclick=()=>{loadEntries();toast("Odświeżono")};
+
+/* ===== Zestawy (szablony wydań) ===== */
+const itemBy=c=>items.find(i=>i.code===c);
+const plProd=n=>n===1?"produkt":(n%10>=2&&n%10<=4&&(n%100<12||n%100>14))?"produkty":"produktów";
+function renderSets(){const box=$("#setList");if(!box)return;
+  box.innerHTML=sets.length?sets.map(s=>{const its=s.items.filter(x=>itemBy(x.code)),tot=its.reduce((a,x)=>a+x.qty,0);
+    return `<div class="setrow"><div class="meta"><div class="nm">${esc(s.name)}</div><div class="sub">${its.length} ${plProd(its.length)} · ${fmtQ(tot)} szt.</div></div>
+      <button class="btn" data-setissue="${esc(s.name)}">Wydaj</button><button class="del" data-setedit="${esc(s.name)}" aria-label="Edytuj zestaw" title="Edytuj">✎</button></div>`}).join("")
+    :`<div class="empty">Nie ma jeszcze zestawów.</div>`}
+
+/* --- edytor zestawu --- */
+let setEd=null; // {old, lines:[{code,qty}]}
+function openSetEditor(name){const s=name?sets.find(x=>x.name===name):null;
+  setEd={old:s?s.name:"",lines:s?s.items.filter(x=>itemBy(x.code)).map(x=>({...x})):[]};
+  $("#setEdTitle").textContent=s?"Edycja zestawu":"Nowy zestaw";$("#setName").value=s?s.name:"";
+  $("#setDelBox").hidden=!s;$("#setDelBox").innerHTML=`<button class="btn ghost" id="setDel" style="width:100%">Usuń zestaw</button>`;
+  $("#setQ").value="";$("#setPick").hidden=true;renderSetLines();$("#setEditor").hidden=false;$("#setNew").hidden=true;
+  $("#setEditor").scrollIntoView({behavior:"smooth",block:"start"});if(!s)$("#setName").focus()}
+function closeSetEditor(){setEd=null;$("#setEditor").hidden=true;$("#setNew").hidden=false}
+function renderSetLines(){$("#setLines").innerHTML=setEd.lines.length?setEd.lines.map((l,i)=>`<div class="setline"><span class="nm">${esc(itemBy(l.code).name)}</span>
+  <div class="qty"><input type="number" inputmode="numeric" min="1" value="${l.qty}" data-sq="${i}" aria-label="Ilość"></div><button class="x" data-sx="${i}" aria-label="Usuń z zestawu">✕</button></div>`).join("")
+  :`<div class="note">Dodaj produkty z listy poniżej.</div>`}
+function renderSetPick(){const box=$("#setPick");if(box.hidden)return;const q=$("#setQ").value.trim().toLowerCase();
+  const l=items.filter(i=>!q||i.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+  box.innerHTML=l.length?l.map(i=>{const inSet=setEd&&setEd.lines.some(x=>x.code===i.code);
+    return `<button type="button" role="option" data-sadd="${esc(i.code)}"><span class="pn">${esc(i.name)}</span><span class="ps">${inSet?"już w zestawie":"dodaj"}</span></button>`}).join("")
+    :`<div class="none">Nie znaleziono produktu</div>`}
+$("#setNew").onclick=()=>openSetEditor(null);
+$("#setEdClose").onclick=closeSetEditor;
+$("#setQ").onfocus=()=>{$("#setPick").hidden=false;renderSetPick()};
+$("#setQ").oninput=()=>{$("#setPick").hidden=false;renderSetPick()};
+$("#setQ").onkeydown=e=>{if(e.key==="Enter"){const f=$("#setPick [data-sadd]");if(f)f.click()}if(e.key==="Escape"){$("#setPick").hidden=true}};
+document.addEventListener("click",e=>{if(!e.target.closest("#setEditor .pick"))$("#setPick").hidden=true});
+$("#setPick").addEventListener("click",e=>{const b=e.target.closest("[data-sadd]");if(!b||!setEd)return;
+  const ex=setEd.lines.findIndex(x=>x.code===b.dataset.sadd);
+  if(ex<0){setEd.lines.push({code:b.dataset.sadd,qty:1});renderSetLines()}
+  $("#setQ").value="";$("#setPick").hidden=true;
+  const inp=$(`#setLines [data-sq="${ex<0?setEd.lines.length-1:ex}"]`);if(inp){inp.focus();inp.select()}});
+$("#setLines").addEventListener("input",e=>{const i=e.target.dataset.sq;if(i!==undefined&&setEd)setEd.lines[i].qty=Math.max(0,Math.round(Number(e.target.value)||0))});
+$("#setLines").addEventListener("click",e=>{const b=e.target.closest("[data-sx]");if(!b||!setEd)return;setEd.lines.splice(Number(b.dataset.sx),1);renderSetLines()});
+$("#setSave").onclick=async()=>{if(!setEd)return;const name=$("#setName").value.trim();
+  if(!name){$("#setName").focus();return toast("Wpisz nazwę zestawu",true)}
+  if(sets.some(s=>s.name.toLowerCase()===name.toLowerCase()&&s.name.toLowerCase()!==setEd.old.toLowerCase()))return toast(`Zestaw „${name}” już istnieje`,true);
+  const lines=setEd.lines.filter(l=>l.qty>0);
+  if(!lines.length)return toast("Dodaj do zestawu co najmniej jeden produkt z ilością",true);
+  const b=$("#setSave");b.disabled=true;b.textContent="Zapisuję…";
+  try{await post({action:"saveSet",name,oldName:setEd.old,items:lines});toast(`Zapisano zestaw: ${name}`);closeSetEditor();await loadItems()}
+  catch(err){toast("Nie zapisano: "+err.message,true)}finally{b.disabled=false;b.textContent="Zapisz zestaw"}};
+$("#setDelBox").addEventListener("click",async e=>{if(!setEd||!setEd.old)return;
+  if(e.target.closest("#setDel")){$("#setDelBox").innerHTML=`<div class="confirm" data-at="${Date.now()}" style="justify-content:center"><span class="note">Usunąć zestaw „${esc(setEd.old)}”? Wpisy w historii zostaną.</span><button class="btn" data-setyes>Usuń</button><button class="btn ghost" data-setno>Anuluj</button></div>`;return}
+  const yes=e.target.closest("[data-setyes]"),no=e.target.closest("[data-setno]");if((yes||no)&&!armed(yes||no))return;
+  if(no){$("#setDelBox").innerHTML=`<button class="btn ghost" id="setDel" style="width:100%">Usuń zestaw</button>`;return}
+  if(yes){yes.disabled=true;const n=setEd.old;try{await post({action:"deleteSet",name:n});toast(`Usunięto zestaw: ${n}`);closeSetEditor();await loadItems()}
+    catch(err){toast("Nie usunięto: "+err.message,true);yes.disabled=false}}});
+$("#setList").addEventListener("click",e=>{const ed=e.target.closest("[data-setedit]"),is=e.target.closest("[data-setissue]");
+  if(ed)openSetEditor(ed.dataset.setedit);
+  if(is){document.querySelector('nav button[data-v="scan"]').click();openIssue(is.dataset.setissue)}});
+
+/* --- wydanie zestawu --- */
+let issueSet=null;
+function openIssue(name){$("#itemPanel").hidden=true;$("#newItem").hidden=true;current=null;closePick();
+  const want=name||ls.get("mqr_set")||"";issueSet=sets.find(s=>s.name===want)||(sets.length===1?sets[0]:null);
+  $("#issuePP").value="";$("#issuePanel").hidden=false;renderIssueSets();renderIssueLines();
+  $("#issuePanel").scrollIntoView({behavior:"smooth",block:"start"});if(issueSet)$("#issuePP").focus()}
+function renderIssueSets(){if($("#issuePanel").hidden)return;const box=$("#issueSets");
+  if(issueSet&&!sets.some(s=>s.name===issueSet.name))issueSet=null;
+  box.innerHTML=sets.length?sets.map(s=>`<button type="button" data-iset="${esc(s.name)}" aria-pressed="${issueSet&&issueSet.name===s.name}">${esc(s.name)}</button>`).join("")
+    :`<div class="note">Nie ma jeszcze zestawów. Utwórz je w zakładce „Produkty” → „Zestawy”.</div>`;
+  $("#issueName").textContent=issueSet?issueSet.name:(sets.length?"Wybierz zestaw":"Brak zestawów")}
+function renderIssueLines(){const box=$("#issueLines");
+  if(!issueSet){box.innerHTML="";$("#issueSave").disabled=true;issueSum();return}
+  $("#issueSave").disabled=false;
+  const its=issueSet.items.filter(x=>itemBy(x.code));
+  box.innerHTML=its.map(x=>{const st=stanOf(x.code);return `<label class="issline" data-code="${esc(x.code)}"><input type="checkbox" checked aria-label="Wydaj ${esc(itemBy(x.code).name)}">
+    <span class="nm"><b>${esc(itemBy(x.code).name)}</b><span class="sub st">na stanie: ${fmtQ(st)}</span></span>
+    <span class="qty"><input type="number" inputmode="numeric" min="1" value="${x.qty}" aria-label="Ilość"></span></label>`}).join("")
+    +(its.length<issueSet.items.length?`<div class="note">Pominięto ${issueSet.items.length-its.length} usunięte produkty.</div>`:"");
+  issueSum()}
+function issueRead(){return[...$("#issueLines").querySelectorAll(".issline")].map(r=>({code:r.dataset.code,on:r.querySelector("[type=checkbox]").checked,qty:Math.round(Number(r.querySelector(".qty input").value)||0)}))}
+function issueSum(){const l=issueRead().filter(x=>x.on&&x.qty>0),pp=$("#issuePP").value.trim(),tot=l.reduce((a,x)=>a+x.qty,0);
+  $("#issueLines").querySelectorAll(".issline").forEach(r=>{const x=issueRead().find(y=>y.code===r.dataset.code);r.classList.toggle("off",!x.on);
+    const st=stanOf(x.code),s=r.querySelector(".st");s.classList.toggle("short",x.on&&x.qty>st);s.textContent=`na stanie: ${fmtQ(st)}`+(x.on&&x.qty>st?" · za mało":"")});
+  $("#issueSum").textContent=l.length?`Razem: ${fmtQ(tot)} szt., ${l.length} ${plProd(l.length)}${pp?" na PP "+pp:""}`:""}
+$("#issueBtn").onclick=()=>openIssue(null);
+$("#issueClose").onclick=()=>{$("#issuePanel").hidden=true;issueSet=null};
+$("#issueSets").addEventListener("click",e=>{const b=e.target.closest("[data-iset]");if(!b)return;
+  issueSet=sets.find(s=>s.name===b.dataset.iset)||null;if(issueSet)ls.set("mqr_set",issueSet.name);renderIssueSets();renderIssueLines();$("#issuePP").focus()});
+$("#issueLines").addEventListener("input",issueSum);$("#issueLines").addEventListener("change",issueSum);$("#issuePP").oninput=issueSum;
+$("#issuePP").onkeydown=e=>{if(e.key==="Enter")$("#issueSave").click()};
+$("#issueSave").onclick=async()=>{if(!issueSet)return;
+  const pp=$("#issuePP").value.trim(),lines=issueRead().filter(x=>x.on&&x.qty>0).map(({code,qty})=>({code,qty}));
+  if(!lines.length)return toast("Zaznacz co najmniej jeden produkt z ilością",true);
+  if(!pp){$("#issuePP").focus();return toast("Wpisz numer PP",true)}
+  if(!me){toast("Najpierw ustaw swoje imię (u góry)",true);$("#who").click();return}
+  const b=$("#issueSave");b.disabled=true;b.textContent="Zapisuję…";
+  try{const r=await post({action:"issueSet",set:issueSet.name,pp,by:me,lines});
+    toast(`Wydano zestaw „${issueSet.name}”: ${r.saved} ${plProd(r.saved)} na PP ${pp}`);
+    ls.set("mqr_set",issueSet.name);$("#issuePanel").hidden=true;issueSet=null;await loadEntries()}
+  catch(err){toast("Nie zapisano: "+err.message,true)}
+  finally{b.disabled=false;b.textContent="Zapisz wydanie zestawu"}};
 
 /* Nowa wersja: sprawdzamy stronę na serwerze (z pominięciem pamięci telefonu) */
 async function checkUpdate(){try{

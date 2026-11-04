@@ -2,6 +2,7 @@
  * Magazyn QR — backend w Google Sheets (Apps Script).
  * Arkusz "Produkty": Kod | Nazwa | Min
  * Arkusz "Wpisy":    Data | Produkt | Kod | Ilość | PP | Kto | ID | Typ | Dokument
+ * Arkusz "Zestawy":  Zestaw | Kod | Ilość   (jeden wiersz = jeden produkt w zestawie)
  *
  * Typ: Wydanie (puste = Wydanie, starsze wpisy), Przyjęcie, Korekta (inwentaryzacja).
  * Stan = przyjęcia − wydania + korekty (Ilość korekty ma znak, np. -3).
@@ -48,7 +49,33 @@ function logSecurity(msg) {
 }
 
 function readItems() {
-  return json({ ok: true, items: rows('Produkty').filter(r => r[0]).map(r => ({ code: String(r[0]), name: String(r[1]), min: Number(r[2]) || 0 })) });
+  return json({ ok: true, items: rows('Produkty').filter(r => r[0]).map(r => ({ code: String(r[0]), name: String(r[1]), min: Number(r[2]) || 0 })), sets: readSets() });
+}
+
+// Zestawy (szablony wydań): [{ name, items: [{ code, qty }] }] w kolejności z arkusza
+function setsSheet() {
+  const ss = SpreadsheetApp.getActive();
+  let s = ss.getSheetByName('Zestawy');
+  if (!s) { s = ss.insertSheet('Zestawy'); s.appendRow(['Zestaw', 'Kod', 'Ilość']); s.setFrozenRows(1); }
+  return s;
+}
+function readSets() {
+  const s = SpreadsheetApp.getActive().getSheetByName('Zestawy');
+  if (!s || s.getLastRow() < 2) return [];
+  const out = [], by = {};
+  s.getRange(2, 1, s.getLastRow() - 1, 3).getValues().forEach(r => {
+    const n = String(r[0]).trim(), c = String(r[1]).trim();
+    if (!n || !c) return;
+    if (!by[n]) { by[n] = { name: n, items: [] }; out.push(by[n]); }
+    by[n].items.push({ code: c, qty: Number(r[2]) || 1 });
+  });
+  return out;
+}
+function removeSetRows(s, name) {
+  const key = name.toLowerCase();
+  if (s.getLastRow() < 2) return;
+  const names = s.getRange(2, 1, s.getLastRow() - 1, 1).getValues();
+  for (let i = names.length - 1; i >= 0; i--) if (String(names[i][0]).trim().toLowerCase() === key) s.deleteRow(i + 2);
 }
 
 function readEntries(limitParam) {
@@ -154,6 +181,46 @@ function doPost(e) {
         return json({ ok: false, error: 'Produkt „' + name + '” już jest na liście' });
       ss.getSheetByName('Produkty').appendRow([code, name]);
       return json({ ok: true });
+    }
+    if (body.action === 'saveSet') {
+      const name = String(body.name || '').trim(), old = String(body.oldName || '').trim();
+      if (!name) return json({ ok: false, error: 'Wpisz nazwę zestawu' });
+      const known = {};
+      rows('Produkty').forEach(r => { if (r[0]) known[String(r[0])] = true; });
+      const seen = {}, lines = [];
+      (body.items || []).forEach(l => {
+        const c = String(l.code || ''), q = Math.round(Number(l.qty));
+        if (known[c] && q > 0 && !seen[c]) { seen[c] = true; lines.push([name, c, q]); }
+      });
+      if (!lines.length) return json({ ok: false, error: 'Dodaj do zestawu co najmniej jeden produkt' });
+      const s = setsSheet();
+      if (name.toLowerCase() !== old.toLowerCase() && readSets().some(x => x.name.toLowerCase() === name.toLowerCase()))
+        return json({ ok: false, error: 'Zestaw „' + name + '” już istnieje' });
+      if (old) removeSetRows(s, old);
+      removeSetRows(s, name);
+      s.getRange(s.getLastRow() + 1, 1, lines.length, 3).setValues(lines);
+      return json({ ok: true });
+    }
+    if (body.action === 'deleteSet') {
+      const name = String(body.name || '').trim();
+      if (!name) return json({ ok: false, error: 'Brak nazwy zestawu' });
+      removeSetRows(setsSheet(), name);
+      return json({ ok: true });
+    }
+    // wydanie całego zestawu na jeden numer PP — jeden wpis „Wydanie” na każdy produkt
+    if (body.action === 'issueSet') {
+      const pp = String(body.pp || '').trim();
+      if (!pp) return json({ ok: false, error: 'Wpisz numer PP' });
+      const names = {};
+      rows('Produkty').forEach(r => { if (r[0]) names[String(r[0])] = String(r[1]); });
+      const doc = body.set ? 'Zestaw: ' + String(body.set).trim() : '';
+      const now = new Date(), seen = {};
+      const data = (body.lines || []).filter(l => {
+        const c = String(l.code || ''); if (!names[c] || !(Number(l.qty) > 0) || seen[c]) return false; seen[c] = true; return true;
+      }).map(l => [now, names[String(l.code)], String(l.code), Math.round(Number(l.qty)), pp, String(body.by || ''), newId(), 'Wydanie', doc]);
+      if (!data.length) return json({ ok: false, error: 'Brak produktów do wydania' });
+      addRows(data);
+      return json({ ok: true, saved: data.length });
     }
     if (body.action === 'renameItem') {
       const code = String(body.code || ''), name = String(body.name || '').trim();
