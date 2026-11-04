@@ -15,7 +15,7 @@
 <script>
 /* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
    Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
-const APP_VER = "16";
+const APP_VER = "17";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -196,8 +196,10 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
     <div id="scanMsg" class="msg" hidden></div>
 
     <div id="newItem" class="panel" style="margin-top:20px" hidden>
-      <div class="label">Nowy kod — nadaj nazwę</div>
-      <div class="code" id="newCode"></div>
+      <div class="item-head">
+        <div><div class="label">Nowy kod — nadaj nazwę</div><div class="code" id="newCode"></div></div>
+        <button class="btn ghost" id="newClose" aria-label="Anuluj">✕</button>
+      </div>
       <input id="newName" placeholder="np. Zegar">
       <button class="btn primary big" id="newSave">Zapisz produkt</button>
     </div>
@@ -609,6 +611,9 @@ function updSum(){if(!current)return;const st=stanOf(current.code),el=$("#sum");
   el.textContent=t;el.classList.toggle("neg",bad)}
 $("#addLine").onclick=addLine;
 $("#itemClose").onclick=()=>{$("#itemPanel").hidden=true;current=null};
+function closeNew(){$("#newItem").hidden=true;$("#newName").value="";delete $("#newItem").dataset.code}
+$("#newClose").onclick=closeNew;
+$("#newName").addEventListener("keydown",e=>{if(e.key==="Escape")closeNew();if(e.key==="Enter")$("#newSave").click()});
 $("#saveEntries").onclick=async()=>{if(!current)return;
   let body,done;
   if(mode==="W"){const raw=readLines().filter(x=>x.qty||x.pp);
