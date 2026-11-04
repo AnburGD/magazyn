@@ -393,7 +393,7 @@ async function startScan(){
   if(scanning)return;
   $("#scanMsg").hidden=true;scanning=true;frameN=0;cand=null;$(".aim").classList.remove("lock");
   $("#scanView").hidden=false;document.body.style.overflow="hidden";history.pushState({scan:1},"");
-  try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}}})}
+  try{stream=await openCam()}
   catch{if(scanning){stopScan();scanErr("Nie udało się włączyć kamery. Zezwól przeglądarce na dostęp do aparatu albo użyj „Zrób zdjęcie kodu”.")}return}
   if(!scanning){stream.getTracks().forEach(t=>t.stop());stream=null;return}
   track=stream.getVideoTracks()[0];
@@ -402,7 +402,41 @@ async function startScan(){
     if(!detector)await loadJsQR()}
   catch{if(scanning){stopScan();scanErr("Nie udało się uruchomić skanera. Sprawdź internet albo użyj „Zrób zdjęcie kodu”.")}return}
   if(!scanning)return;
-  camControls();scanStart=performance.now();tick()}
+  camControls();scanStart=performance.now();tick();findTorch()}
+/* Aparat: zapamiętany (z latarką) albo domyślny tylny */
+const CAM_KEY="mqr_cam",CAM_PROBED="mqr_cam_probed",CAM_BASE={width:{ideal:1920},height:{ideal:1080}};
+const gum=video=>navigator.mediaDevices.getUserMedia({audio:false,video});
+async function openCam(){const id=ls.get(CAM_KEY);
+  if(id){try{return await gum({...CAM_BASE,deviceId:{exact:id}})}catch{ls.set(CAM_KEY,"");ls.set(CAM_PROBED,"")}}
+  return gum({...CAM_BASE,facingMode:{ideal:"environment"}})}
+const capsOf=t=>{try{return t&&t.getCapabilities?t.getCapabilities():{}}catch{return{}}};
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+async function attach(s){stream=s;track=s.getVideoTracks()[0];const v=$("#cam");v.srcObject=s;await v.play();camControls()}
+/* Latarka: część telefonów podaje ją dopiero po chwili, a część domyślnie wybiera obiektyw bez lampy.
+   Wtedy raz szukamy tylnego aparatu z latarką i zapamiętujemy go na tym telefonie. */
+async function findTorch(){
+  if(capsOf(track).torch)return;
+  await wait(800);if(!scanning)return;
+  if(capsOf(track).torch){camControls();return}
+  if(ls.get(CAM_KEY)||ls.get(CAM_PROBED)||!navigator.mediaDevices.enumerateDevices)return;
+  ls.set(CAM_PROBED,"1");
+  let devs=[];try{devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput")}catch{return}
+  const cur=(track.getSettings&&track.getSettings().deviceId)||"";
+  const front=d=>/front|przedni|user|selfie/i.test(d.label);
+  const cands=devs.filter(d=>d.deviceId&&d.deviceId!==cur&&!front(d)).slice(0,4);
+  if(!cands.length)return;
+  $(".scantop").textContent="Szukam aparatu z latarką…";
+  stream.getTracks().forEach(t=>t.stop());
+  let found=null;
+  for(const d of cands){if(!scanning)return;
+    let s=null;try{s=await gum({...CAM_BASE,deviceId:{exact:d.deviceId}});
+      let ok=!!capsOf(s.getVideoTracks()[0]).torch;if(!ok){await wait(400);ok=!!capsOf(s.getVideoTracks()[0]).torch}
+      if(ok){found={id:d.deviceId,s};break}}catch{}
+    if(s)s.getTracks().forEach(t=>t.stop())}
+  if(!scanning){if(found)found.s.getTracks().forEach(t=>t.stop());return}
+  $(".scantop").textContent="Skieruj aparat na kod QR";
+  try{if(found){ls.set(CAM_KEY,found.id);await attach(found.s)}else await attach(await openCam())}
+  catch{stopScan();scanErr("Nie udało się włączyć kamery. Spróbuj jeszcze raz.")}}
 function camControls(){
   let caps={};try{caps=track.getCapabilities?track.getCapabilities():{}}catch{}
   if(caps.focusMode&&caps.focusMode.includes("continuous"))track.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
@@ -411,7 +445,9 @@ function camControls(){
   torchOn=false;$("#torch").hidden=!caps.torch;$("#torch").setAttribute("aria-pressed","false")}
 function zoomLbl(){$("#zoomVal").textContent=Number($("#zoom").value).toFixed(1)+"×"}
 $("#zoom").oninput=()=>{if(track)track.applyConstraints({advanced:[{zoom:Number($("#zoom").value)}]}).catch(()=>{});zoomLbl()};
-$("#torch").onclick=()=>{torchOn=!torchOn;if(track)track.applyConstraints({advanced:[{torch:torchOn}]}).catch(()=>{});$("#torch").setAttribute("aria-pressed",torchOn)};
+$("#torch").onclick=async()=>{if(!track)return;const want=!torchOn;
+  try{await track.applyConstraints({advanced:[{torch:want}]});torchOn=want;$("#torch").setAttribute("aria-pressed",torchOn)}
+  catch{toast("Nie udało się włączyć latarki w tym aparacie",true)}};
 async function readCode(v){
   if(detector){const rs=await detector.detect(v);
     // przy kilku kodach w kadrze bierzemy ten najbliżej środka ramki
