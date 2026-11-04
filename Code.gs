@@ -127,15 +127,10 @@ function newId() {
   return Utilities.getUuid().slice(0, 12);
 }
 
-// Stary sposób (PIN w adresie). Zostaje tylko na czas przejścia, żeby telefony z
-// poprzednią wersją aplikacji działały do pierwszego odświeżenia. Do usunięcia później.
-function doGet(e) {
-  const p = e.parameter || {};
-  const bad = checkPin(p.token);
-  if (bad) return bad;
-  if (p.action === 'items') return readItems();
-  if (p.action === 'entries') return readEntries(p.limit);
-  return json({ ok: false, error: 'Nieznana akcja' });
+// Zapytania GET (z PIN-em w adresie) nie są obsługiwane — wszystko idzie POST-em.
+// Parametry adresu są celowo ignorowane, żeby PIN nigdy nie był przetwarzany z URL-a.
+function doGet() {
+  return json({ ok: false, error: 'Nieobsługiwane zapytanie — odśwież aplikację' });
 }
 
 function doPost(e) {
