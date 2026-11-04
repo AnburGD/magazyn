@@ -13,6 +13,9 @@
 <script src="lib/html5-qrcode.min.js"></script>
 <script src="lib/qrcode.js"></script>
 <script>
+/* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
+   Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
+const APP_VER = "15";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -78,6 +81,12 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid 
 .pp input{padding-left:40px;font-family:var(--mono)}
 .qty input{text-align:center;font-family:var(--mono)}
 .sum{font-size:14px;color:var(--muted)}
+.upd{position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;align-items:center;gap:12px;background:var(--accent);color:var(--accent-ink);font-weight:600;
+  padding-block:12px calc(12px + env(safe-area-inset-bottom));padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));box-shadow:0 -4px 16px rgba(0,0,0,.18)}
+.upd span{flex:1;min-width:0}
+.upd .btn{background:var(--accent-ink);color:var(--accent);border-color:var(--accent-ink)}
+body.has-upd main{padding-bottom:88px}
+body.has-upd .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:12px 18px;border-radius:6px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
 .toast.err{background:var(--err);color:#fff}
 .note{font-size:14px;color:var(--muted)}
@@ -271,6 +280,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
   </section>
 </main>
 
+<div id="upd" class="upd" role="status" hidden><span>Jest nowa wersja aplikacji</span><button class="btn" id="updBtn">Odśwież</button></div>
 <div id="toast" class="toast" hidden></div>
 
 <script>
@@ -664,6 +674,18 @@ $("#csv").onclick=()=>{
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download="magazyn-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 $("#refresh").onclick=()=>{loadEntries();toast("Odświeżono")};
+
+/* Nowa wersja: sprawdzamy stronę na serwerze (z pominięciem pamięci telefonu) */
+async function checkUpdate(){try{
+  const t=await fetch("index.html?u="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"");
+  const m=t.match(/const APP_VER = "([^"]+)"/);
+  if(m&&m[1]!==APP_VER){$("#upd").hidden=false;document.body.classList.add("has-upd")}}catch{}}
+$("#updBtn").onclick=async()=>{const b=$("#updBtn");b.disabled=true;b.textContent="…";
+  try{const r=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(r)await r.update()}catch{}
+  location.reload()};
+setTimeout(checkUpdate,3000);
+setInterval(()=>{if(!document.hidden)checkUpdate()},120000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate()});
 
 /* automatyczne odświeżanie: co 30 s i po powrocie do aplikacji */
 setInterval(()=>{if(!document.hidden&&pin)loadEntries()},30000);
