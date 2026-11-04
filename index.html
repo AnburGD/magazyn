@@ -15,7 +15,7 @@
 <script>
 /* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
    Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
-const APP_VER = "15";
+const APP_VER = "16";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -113,6 +113,10 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
 .prod{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
 .prod .meta{flex:1;min-width:0}
 .prod .nm{font-weight:600}
+.prod.editing>.btn,.prod.editing>.del{display:none}
+.rename{display:flex;gap:6px;margin-top:2px}
+.rename input{flex:1;min-width:0}
+.rename .btn{padding:8px 12px}
 .seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px}
 .seg button{flex:1;border:0;background:none;color:var(--muted);font:600 14px var(--body);padding:9px 4px;border-radius:4px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
@@ -325,7 +329,7 @@ async function post(body){
   const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
 /* Odświeżanie w tle nie może zamknąć otwartego potwierdzenia („Usuń / Anuluj”) ani edycji minimum */
 let refreshing=false;
-function keepOpen(el){return refreshing&&!!el.querySelector(".confirm:not(.busy),.minedit:not(.busy)")}
+function keepOpen(el){return refreshing&&!!el.querySelector(".confirm:not(.busy),.minedit:not(.busy),.rename:not(.busy)")}
 /* Przyciski potwierdzenia pojawiają się pod palcem — ignorujemy dotknięcia w pierwszych 450 ms (podwójne tapnięcie) */
 const ARM_MS=450;
 const armed=b=>{const box=b.closest("[data-at]");return !box||Date.now()-Number(box.dataset.at)>=ARM_MS};
@@ -368,16 +372,38 @@ $("#fPP").oninput=renderHist;$("#fItem").onchange=renderHist;$("#fType").onchang
 $("#fFrom").onchange=renderHist;$("#fTo").onchange=renderHist;
 $("#hSort").onclick=e=>{const b=e.target.closest("[data-s]");if(!b)return;histSort=b.dataset.s;
   $("#hSort").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderHist()};
-function renderProd(){if(keepOpen($("#prodList")))return;$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button><button class="del" data-delitem="${esc(i.code)}" data-nm="${esc(i.name)}" aria-label="Usuń produkt">✕</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
+function renderProd(){if(keepOpen($("#prodList")))return;$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button><button class="del" data-ren="${esc(i.code)}" aria-label="Zmień nazwę" title="Zmień nazwę">✎</button><button class="del" data-delitem="${esc(i.code)}" data-nm="${esc(i.name)}" aria-label="Usuń produkt">✕</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
 
 /* naklejka QR */
 $("#prodList").addEventListener("click",async e=>{
   const d=e.target.closest("[data-delitem]"),yes=e.target.closest("[data-yesitem]"),no=e.target.closest("[data-noitem]");
   if(d){const row=d.closest(".prod");row.querySelector(".meta").insertAdjacentHTML("beforeend",`<div class="confirm" data-at="${Date.now()}" style="justify-content:flex-start;margin-top:8px"><span class="note">Usunąć z listy? Historia wpisów zostanie.</span><button class="btn" data-yesitem="${esc(d.dataset.delitem)}">Usuń</button><button class="btn ghost" data-noitem>Anuluj</button></div>`);d.remove();return}
+  /* zmiana nazwy — kod (i naklejki QR) zostaje ten sam */
+  const ren=e.target.closest("[data-ren]"),rok=e.target.closest("[data-renok]"),rno=e.target.closest("[data-renno]");
+  if(ren){const it=items.find(i=>i.code===ren.dataset.ren);if(!it)return;const row=ren.closest(".prod");row.classList.add("editing");
+    row.querySelector(".meta").innerHTML=`<div class="rename" data-at="${Date.now()}"><input value="${esc(it.name)}" aria-label="Nowa nazwa" maxlength="80"><button class="btn primary" data-renok="${esc(it.code)}">Zapisz</button><button class="btn ghost" data-renno aria-label="Anuluj">✕</button></div><div class="code">${esc(it.code)}</div>`;
+    const inp=row.querySelector(".rename input");inp.focus();inp.select();return}
+  if((rok||rno)&&!armed(rok||rno))return;
+  if(rno){renderProd();return}
+  if(rok){const it=items.find(i=>i.code===rok.dataset.renok),inp=rok.parentElement.querySelector("input"),name=inp.value.trim();
+    if(!it)return renderProd();
+    if(!name){inp.focus();return toast("Wpisz nową nazwę",true)}
+    if(name===it.name)return renderProd();
+    if(items.some(i=>i.code!==it.code&&i.name.trim().toLowerCase()===name.toLowerCase())){inp.focus();return toast(`„${name}” już jest na liście`,true)}
+    rok.disabled=true;rok.textContent="…";rok.closest(".rename").classList.add("busy");
+    try{await post({action:"renameItem",code:it.code,name});const old=it.name;it.name=name;
+      entries.forEach(x=>{if(x.code===it.code)x.name=name});
+      if(current&&current.code===it.code){current.name=name;$("#itemName").textContent=name}
+      toast(`Zmieniono: ${old} → ${name}`);renderProd();renderFilter();renderEntries()}
+    catch(err){toast("Nie zapisano: "+err.message,true);renderProd()}
+    return}
   if((yes||no)&&!armed(yes||no))return;
   if(no){renderProd();return}
   if(yes){yes.disabled=true;yes.closest(".confirm").classList.add("busy");try{await post({action:"deleteItem",code:yes.dataset.yesitem});toast("Usunięto produkt");await loadItems()}catch(err){toast(err.message,true);renderProd()}}
 });
+$("#prodList").addEventListener("keydown",e=>{const box=e.target.closest(".rename");if(!box)return;
+  if(e.key==="Enter"){box.dataset.at=0;box.querySelector("[data-renok]").click()}
+  if(e.key==="Escape"){box.dataset.at=0;box.querySelector("[data-renno]").click()}});
 $("#prodList").onclick=e=>{const b=e.target.closest("[data-qr]");if(!b)return;
   const code=b.dataset.qr,name=b.dataset.nm,q=qrcode(0,"M");q.addData(code);q.make();
   const n=q.getModuleCount(),cell=12,pad=48,size=n*cell+pad*2,h=size+70,c=document.createElement("canvas");

@@ -155,6 +155,26 @@ function doPost(e) {
       ss.getSheetByName('Produkty').appendRow([code, name]);
       return json({ ok: true });
     }
+    if (body.action === 'renameItem') {
+      const code = String(body.code || ''), name = String(body.name || '').trim();
+      if (!name) return json({ ok: false, error: 'Wpisz nową nazwę' });
+      const all = rows('Produkty');
+      let row = -1;
+      for (let i = 0; i < all.length; i++) if (String(all[i][0]) === code) { row = i + 2; break; }
+      if (row < 0) return json({ ok: false, error: 'Nie znaleziono produktu — odśwież listę' });
+      if (all.some(r => String(r[0]) !== code && String(r[1]).trim().toLowerCase() === name.toLowerCase()))
+        return json({ ok: false, error: 'Produkt „' + name + '” już jest na liście' });
+      ss.getSheetByName('Produkty').getRange(row, 2).setValue(name);
+      // historia pokazuje aktualną nazwę — podmieniamy ją we wpisach tego produktu (kod się nie zmienia)
+      const w = ss.getSheetByName('Wpisy');
+      if (w.getLastRow() >= 2) {
+        const n = w.getLastRow() - 1, codes = w.getRange(2, 3, n, 1).getValues(), names = w.getRange(2, 2, n, 1).getValues();
+        let changed = 0;
+        for (let i = 0; i < n; i++) if (String(codes[i][0]) === code && names[i][0] !== name) { names[i][0] = name; changed++; }
+        if (changed) w.getRange(2, 2, n, 1).setValues(names);
+      }
+      return json({ ok: true });
+    }
     if (body.action === 'deleteItem') {
       const code = String(body.code || '');
       const all = rows('Produkty');
