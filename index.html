@@ -47,7 +47,7 @@ h2{font-family:var(--display);font-weight:700;font-size:22px;text-transform:uppe
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .scanbtn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:96px;margin-top:20px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;font:700 26px var(--display);text-transform:uppercase;letter-spacing:.04em;cursor:pointer;background-image:repeating-linear-gradient(135deg,transparent 0 18px,rgba(0,0,0,.06) 18px 36px)}
 .scanbtn svg{width:34px;height:34px}
-.scanview{position:fixed;inset:0;z-index:30;background:#000;color:#fff;display:flex;flex-direction:column}
+.scanview{position:fixed;inset:0;z-index:30;background:#000;color:#fff;display:flex;flex-direction:column;touch-action:none;user-select:none;-webkit-user-select:none}
 .scanview video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .aim{--c:#f5c22b;position:absolute;left:50%;top:50%;width:min(70vw,70vh);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:10px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);
   background:linear-gradient(var(--c),var(--c)) 0 0/44px 5px,linear-gradient(var(--c),var(--c)) 0 0/5px 44px,linear-gradient(var(--c),var(--c)) 100% 0/44px 5px,linear-gradient(var(--c),var(--c)) 100% 0/5px 44px,
@@ -55,9 +55,8 @@ h2{font-family:var(--display);font-weight:700;font-size:22px;text-transform:uppe
 .aim.lock{--c:#3ddc84;box-shadow:0 0 0 100vmax rgba(0,0,0,.35),inset 0 0 0 3px #3ddc84}
 .scantop{position:relative;padding:calc(18px + env(safe-area-inset-top)) 16px 28px;text-align:center;font-weight:600;font-size:17px;background:linear-gradient(rgba(0,0,0,.65),transparent)}
 .scanbot{position:relative;margin-top:auto;padding:28px max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px;background:linear-gradient(transparent,rgba(0,0,0,.75))}
-.zoomrow{display:flex;align-items:center;gap:12px;font:600 14px var(--body)}
-.zoomrow input{flex:1;padding:0;accent-color:#f5c22b;background:none;border:0;height:32px}
-.zoomrow b{font-family:var(--mono);min-width:48px;text-align:right}
+.zoominfo{align-self:center;padding:6px 14px;border-radius:999px;background:rgba(0,0,0,.45);font:600 14px var(--body);color:rgba(255,255,255,.85)}
+.zoominfo.on{background:#f5c22b;color:#1b1e1c;font-family:var(--mono);font-size:16px}
 .scanbot .row .btn{flex:1;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25);color:#fff;padding:15px;font-size:18px}
 .scanbot .btn[aria-pressed="true"]{background:#f5c22b;color:#1b1e1c;border-color:#f5c22b}
 .row{display:flex;gap:8px}
@@ -166,7 +165,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       <div class="aim" aria-hidden="true"></div>
       <div class="scantop">Skieruj aparat na kod QR</div>
       <div class="scanbot">
-        <label class="zoomrow" id="zoomRow" hidden>Przybliżenie<input id="zoom" type="range"><b id="zoomVal"></b></label>
+        <div class="zoominfo" id="zoomInfo" hidden></div>
         <div class="row"><button class="btn" id="torch" aria-pressed="false" hidden>Latarka</button><button class="btn" id="scanClose">Zamknij</button></div>
       </div>
     </div>
@@ -440,11 +439,31 @@ async function findTorch(){
 function camControls(){
   let caps={};try{caps=track.getCapabilities?track.getCapabilities():{}}catch{}
   if(caps.focusMode&&caps.focusMode.includes("continuous"))track.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
-  const z=$("#zoom");$("#zoomRow").hidden=!caps.zoom;
-  if(caps.zoom){z.min=caps.zoom.min;z.max=caps.zoom.max;z.step=caps.zoom.step||0.1;z.value=track.getSettings().zoom||caps.zoom.min;zoomLbl()}
+  zCaps=caps.zoom&&caps.zoom.max>caps.zoom.min?caps.zoom:null;
+  try{zCur=(track.getSettings&&track.getSettings().zoom)||(zCaps?zCaps.min:1)}catch{zCur=zCaps?zCaps.min:1}
+  $("#zoomInfo").hidden=!zCaps;zoomIdle()
   torchOn=false;$("#torch").hidden=!caps.torch;$("#torch").setAttribute("aria-pressed","false")}
-function zoomLbl(){$("#zoomVal").textContent=Number($("#zoom").value).toFixed(1)+"×"}
-$("#zoom").oninput=()=>{if(track)track.applyConstraints({advanced:[{zoom:Number($("#zoom").value)}]}).catch(()=>{});zoomLbl()};
+/* Przybliżanie dwoma palcami, jak w zwykłym aparacie (zoom sprzętowy kamery) */
+let zCaps=null,zCur=1,pinch=null,zBusy=false,zWant=null,zIdleT=0;
+const fingerGap=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+function zoomIdle(){const el=$("#zoomInfo");el.classList.remove("on");
+  el.textContent=zCur>(zCaps?zCaps.min:1)+0.05?`${zCur.toFixed(1)}× · rozsuń lub zsuń palce`:"Rozsuń dwa palce, żeby przybliżyć"}
+function setZoom(z){if(!zCaps)return;const st=zCaps.step||0.1;
+  z=Number(Math.min(zCaps.max,Math.max(zCaps.min,Math.round(z/st)*st)).toFixed(2));zCur=z;
+  const el=$("#zoomInfo");el.classList.add("on");el.textContent=z.toFixed(1)+"×";
+  clearTimeout(zIdleT);zIdleT=setTimeout(zoomIdle,1200);
+  zWant=z;if(!zBusy)pushZoom()}
+// jedno ustawienie naraz — kamera nie nadąża za każdym ruchem palców
+async function pushZoom(){zBusy=true;
+  while(zWant!==null&&track){const z=zWant;zWant=null;try{await track.applyConstraints({advanced:[{zoom:z}]})}catch{}}
+  zBusy=false}
+const sv=$("#scanView");
+sv.addEventListener("touchstart",e=>{if(e.touches.length===2&&zCaps&&!e.target.closest("button")){
+  pinch={gap:fingerGap(e.touches[0],e.touches[1]),z:zCur};e.preventDefault()}},{passive:false});
+sv.addEventListener("touchmove",e=>{if(!pinch||e.touches.length!==2)return;e.preventDefault();
+  setZoom(pinch.z*fingerGap(e.touches[0],e.touches[1])/pinch.gap)},{passive:false});
+sv.addEventListener("touchend",e=>{if(e.touches.length<2)pinch=null});
+sv.addEventListener("touchcancel",()=>{pinch=null});
 $("#torch").onclick=async()=>{if(!track)return;const want=!torchOn;
   try{await track.applyConstraints({advanced:[{torch:want}]});torchOn=want;$("#torch").setAttribute("aria-pressed",torchOn)}
   catch{toast("Nie udało się włączyć latarki w tym aparacie",true)}};
