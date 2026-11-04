@@ -222,6 +222,20 @@ function doPost(e) {
       addRows(data);
       return json({ ok: true, saved: data.length });
     }
+    // faktura z kilkoma produktami naraz — jeden wpis „Przyjęcie” na produkt, Dokument = numer faktury
+    if (body.action === 'addInvoice') {
+      const doc = String(body.doc || '').trim().replace(/\s+/g, ' ');
+      if (!doc) return json({ ok: false, error: 'Wpisz numer faktury' });
+      const names = {};
+      rows('Produkty').forEach(r => { if (r[0]) names[String(r[0])] = String(r[1]); });
+      const now = new Date(), seen = {};
+      const data = (body.lines || []).filter(l => {
+        const c = String(l.code || ''); if (!names[c] || !(Number(l.qty) > 0) || seen[c]) return false; seen[c] = true; return true;
+      }).map(l => [now, names[String(l.code)], String(l.code), Math.round(Number(l.qty)), '', String(body.by || ''), newId(), 'Przyjęcie', doc]);
+      if (!data.length) return json({ ok: false, error: 'Dodaj do faktury co najmniej jeden produkt' });
+      addRows(data);
+      return json({ ok: true, saved: data.length });
+    }
     if (body.action === 'renameItem') {
       const code = String(body.code || ''), name = String(body.name || '').trim();
       if (!name) return json({ ok: false, error: 'Wpisz nową nazwę' });

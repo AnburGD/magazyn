@@ -15,7 +15,7 @@
 <script>
 /* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
    Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
-const APP_VER = "19";
+const APP_VER = "20";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -25,12 +25,12 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27O
 <style>
 :root{
   --bg:#f3f4f1;--surface:#fff;--fg:#1b1e1c;--muted:#5f6660;--line:#d9dcd6;
-  --accent:#f2b705;--accent-ink:#1b1e1c;--err:#b3261e;
+  --accent:#f2b705;--accent-ink:#1b1e1c;--err:#b3261e;--ok:#2e7d32;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme:dark){:root{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;color-scheme:dark}}
+@media (prefers-color-scheme:dark){:root{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
@@ -169,6 +169,27 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
 .minedit .btn{padding:6px 10px;font-size:14px}
 .big-stan{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .big-stan b{font:700 30px var(--display);font-variant-numeric:tabular-nums}
+.inv{border:1px solid var(--line);border-radius:6px;background:var(--surface);margin-bottom:10px}
+.inv>summary{list-style:none;display:flex;flex-direction:column;gap:8px;padding:14px;cursor:pointer}
+.inv>summary::-webkit-details-marker{display:none}
+.inv .ihead{display:flex;align-items:baseline;gap:10px}
+.inv .idoc{flex:1;min-width:0;font:700 18px var(--mono);overflow-wrap:anywhere}
+.inv .pill{font:600 12px var(--body);text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.inv .pill.open{background:var(--accent);color:var(--accent-ink)}
+.inv .pill.closed{background:var(--ok);color:#fff}
+.inv .ilines{display:flex;flex-direction:column;gap:8px}
+.inv .il{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;font-size:15px}
+.inv .il .q{font:600 15px var(--mono);white-space:nowrap}
+.inv .bar{grid-column:1/-1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.inv .bar i{display:block;height:100%;background:var(--accent)}
+.inv .bar i.full{background:var(--ok)}
+.inv .more{font-size:13px;color:var(--muted)}
+.inv[open] .more{display:none}
+.inv .alloc{border-top:1px solid var(--line);padding:10px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.inv .alloc h4{margin:0;font:600 13px var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.inv .alloc table td{padding:6px 4px}
+.invhint{font-size:14px;background:var(--bg);border-radius:4px;padding:8px 10px}
+.invhint b{font-family:var(--mono)}
 .tag{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:3px;background:var(--line);color:var(--fg);white-space:nowrap}
 .tag.P{background:#2e7d32;color:#fff}
 .tag.K{background:#5c6bc0;color:#fff}
@@ -182,6 +203,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
     <nav>
       <button data-v="scan" aria-selected="true">Skanuj</button>
       <button data-v="stan" aria-selected="false">Stany<span class="dot" id="lowDot" hidden></span></button>
+      <button data-v="fakt" aria-selected="false">Faktury</button>
       <button data-v="hist" aria-selected="false">Historia</button>
       <button data-v="prod" aria-selected="false">Produkty</button>
     </nav>
@@ -244,9 +266,9 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
         <button class="btn" id="addLine">+ Dodaj kolejny PP</button>
       </div>
       <div id="mP" hidden>
-        <div class="line" style="grid-template-columns:88px 1fr"><span class="label">Ilość</span><span class="label">Dokument (opcjonalnie)</span>
+        <div class="line" style="grid-template-columns:88px 1fr"><span class="label">Ilość</span><span class="label">Nr faktury (opcjonalnie)</span>
           <div class="qty"><input id="rQty" type="number" inputmode="numeric" min="1" placeholder="0" aria-label="Ilość"></div>
-          <input id="rDoc" placeholder="np. PZ 12/2026 lub nr faktury" aria-label="Dokument"></div>
+          <input id="rDoc" placeholder="np. FV 123/2026" aria-label="Numer faktury"></div>
       </div>
       <div id="mK" hidden>
         <div class="note" style="margin-bottom:8px">Policz, ile sztuk leży na półce, i wpisz wynik. Stan w aplikacji zostanie poprawiony.</div>
@@ -289,6 +311,38 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
     <div id="stanList" style="margin-top:8px"></div>
     <div class="row" style="margin-top:16px"><button class="btn" id="stanCsv">Pobierz stany (CSV)</button></div>
     <p class="note">Stan = przyjęcia − wydania ± inwentaryzacja. Kliknij „min”, żeby ustawić minimalny stan — poniżej niego produkt trafia do „Do zamówienia”.</p>
+  </section>
+
+  <section id="v-fakt" hidden>
+    <h2>Faktury</h2>
+    <p class="note">Każde wydanie na PP schodzi automatycznie z najstarszej otwartej faktury na ten produkt. Faktura zamyka się sama, gdy wydasz wszystko, co na niej było.</p>
+    <button class="btn primary" id="invNew" style="width:100%">+ Nowa faktura</button>
+    <div id="invEditor" class="panel" style="margin-top:12px" hidden>
+      <div class="item-head">
+        <div class="label">Nowa faktura</div>
+        <button class="btn ghost" id="invEdClose" aria-label="Zamknij">✕</button>
+      </div>
+      <input id="invDoc" placeholder="Numer faktury, np. FV 123/2026" maxlength="60" autocomplete="off">
+      <div class="note" id="invDocNote" hidden>Ta faktura już jest — produkty zostaną do niej dopisane.</div>
+      <div class="setline"><span class="label">Produkt</span><span class="label">Ilość</span><span></span></div>
+      <div class="lines" id="invLines"></div>
+      <div class="pick" style="margin-top:0">
+        <input id="invQ" type="search" placeholder="Dodaj produkt — szukaj po nazwie" autocomplete="off">
+        <div class="picklist" id="invPick" role="listbox" aria-label="Produkty" hidden></div>
+      </div>
+      <div class="sum" id="invSum"></div>
+      <button class="btn primary big" id="invSave">Zapisz fakturę</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">
+      <div class="seg" id="invFilter">
+        <button data-f="open" aria-pressed="true">Otwarte</button>
+        <button data-f="closed" aria-pressed="false">Zamknięte</button>
+        <button data-f="all" aria-pressed="false">Wszystkie</button>
+      </div>
+      <input id="invSearch" type="search" placeholder="Szukaj: numer faktury, produkt lub PP" autocomplete="off">
+    </div>
+    <div id="invList" style="margin-top:12px"></div>
+    <button class="btn" id="invCsv" style="margin-top:4px">Pobierz rozliczenie faktur (CSV)</button>
   </section>
 
   <section id="v-hist" hidden>
@@ -400,14 +454,14 @@ async function loadEntries(){try{const j=await api("entries",{limit:5000});
 /* zakładki */
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
-  ["scan","stan","hist","prod"].forEach(k=>$("#v-"+k).hidden=k!==b.dataset.v);
+  ["scan","stan","fakt","hist","prod"].forEach(k=>$("#v-"+k).hidden=k!==b.dataset.v);
   if(b.dataset.v!=="scan")stopScan();if(b.dataset.v!=="scan"&&b.dataset.v!=="prod")loadEntries()});
 
 /* widoki */
 /* wpisy mają typ: W = wydanie (na PP), P = przyjęcie, K = korekta z inwentaryzacji (ilość ze znakiem) */
 const sgn=n=>(n>0?"+":n<0?"−":"±")+fmtQ(Math.abs(n));
 function opCell(e){return e.type==="P"?`<span class="tag P">Przyjęcie</span>${e.doc?`<div class="sub">${esc(e.doc)}</div>`:""}`
-  :e.type==="K"?`<span class="tag K">Inwentaryzacja</span><div class="sub">${esc(e.doc)}</div>`:"PP "+esc(e.pp)+(e.doc?`<div class="sub">${esc(e.doc)}</div>`:"")}
+  :e.type==="K"?`<span class="tag K">Inwentaryzacja</span><div class="sub">${esc(e.doc)}</div>`:"PP "+esc(e.pp)+(e.doc?`<div class="sub">${esc(e.doc)}</div>`:"")+allocNote(e)}
 const qtyCell=e=>e.type==="W"?fmtQ(e.qty):sgn(e.qty);
 function calcStock(l){const m={};l.forEach(e=>m[e.code]=(m[e.code]||0)+(e.type==="W"?-e.qty:e.qty));return m}
 const stanOf=code=>stock[code]||0;
@@ -690,7 +744,7 @@ $("#saveEntries").onclick=async()=>{if(!current)return;
   finally{b.disabled=false;b.textContent=SAVE_LBL[mode]}};
 
 /* ===== wyświetlanie danych w aplikacji ===== */
-function renderEntries(){renderRecent();renderHist();renderStany();renderPick();if(current){renderItemStats();updSum()}}
+function renderEntries(){computeInvoices();renderInvoices();renderRecent();renderHist();renderStany();renderPick();if(current){renderItemStats();updSum()}}
 const pad2=n=>String(n).padStart(2,"0");
 const dayStr=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
 const fmtQ=n=>n.toLocaleString("pl-PL");
@@ -698,7 +752,10 @@ const fmtQ=n=>n.toLocaleString("pl-PL");
 
 function renderItemStats(){
   const st=stanOf(current.code),low=current.min>0&&st<current.min;
-  const head=`<div class="big-stan"><span class="label">Na stanie${current.min?` · min ${fmtQ(current.min)}`:""}</span><b class="${st<0||low?"neg":""}">${fmtQ(st)} szt.</b></div>`;
+  let head=`<div class="big-stan"><span class="label">Na stanie${current.min?` · min ${fmtQ(current.min)}`:""}</span><b class="${st<0||low?"neg":""}">${fmtQ(st)} szt.</b></div>`;
+  const oq=(openQ.get(current.code)||[]).filter(x=>x.line.used<x.line.qty);
+  const inv=oq.length?`<div class="invhint">Wydanie zejdzie z faktury <b>${esc(oq[0].inv.doc)}</b>: zostało ${fmtQ(oq[0].line.qty-oq[0].line.used)} z ${fmtQ(oq[0].line.qty)} szt.${oq.length>1?` · i ${oq.length-1} kolejn${oq.length===2?"a":"e"} faktur${oq.length===2?"a":"y"}`:""}</div>`:"";
+  head+=inv;
   const l=entries.filter(e=>e.code===current.code&&e.type==="W");
   if(!l.length){$("#itemStats").innerHTML=head+'<div class="note">Brak wcześniejszych wydań tego produktu.</div>';return}
   const total=l.reduce((a,e)=>a+e.qty,0),by=new Map();l.forEach(e=>by.set(e.pp,(by.get(e.pp)||0)+e.qty));
@@ -763,6 +820,91 @@ $("#csv").onclick=()=>{
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download="magazyn-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
 $("#refresh").onclick=()=>{loadEntries();toast("Odświeżono")};
+
+/* ===== Faktury: rozliczanie wydań na faktury (FIFO) =====
+   Faktura = przyjęcia z tym samym numerem dokumentu. Każde wydanie na PP schodzi z najstarszej
+   otwartej faktury na dany produkt, przyjętej PRZED tym wydaniem; nadwyżka idzie na następną,
+   a gdy otwartych brak — wydanie zostaje „bez faktury”. Liczone z historii, więc usunięcie
+   wpisu samo przelicza faktury. Inwentaryzacja nie wpływa na faktury. */
+let invoices=[],allocOf=new Map(),openQ=new Map(),invFilter="open";
+const invKey=d=>String(d||"").trim().replace(/\s+/g," ").toUpperCase();
+function computeInvoices(){
+  const byKey=new Map();invoices=[];allocOf=new Map();openQ=new Map();
+  for(let i=entries.length-1;i>=0;i--){const e=entries[i];   // od najstarszego
+    if(e.type==="P"&&e.doc){const k=invKey(e.doc);let inv=byKey.get(k);
+      if(!inv){inv={key:k,doc:e.doc.trim().replace(/\s+/g," "),at:e.at,lines:[]};byKey.set(k,inv);invoices.push(inv)}
+      let line=inv.lines.find(l=>l.code===e.code);
+      if(!line){line={code:e.code,name:e.name,qty:0,used:0,allocs:[]};inv.lines.push(line);
+        if(!openQ.has(e.code))openQ.set(e.code,[]);openQ.get(e.code).push({inv,line})}
+      line.qty+=e.qty;line.name=e.name}
+    else if(e.type==="W"){let left=e.qty;const out=[];
+      for(const x of openQ.get(e.code)||[]){if(left<=0)break;const free=x.line.qty-x.line.used;if(free<=0)continue;
+        const t=Math.min(free,left);x.line.used+=t;left-=t;x.line.allocs.push({pp:e.pp,qty:t,at:e.at,by:e.by});out.push({doc:x.inv.doc,qty:t})}
+      if(out.length)allocOf.set(e.id,{list:out,free:left})}}
+  invoices.forEach(inv=>{inv.total=inv.lines.reduce((a,l)=>a+l.qty,0);inv.used=inv.lines.reduce((a,l)=>a+Math.min(l.used,l.qty),0);inv.closed=inv.used>=inv.total});
+  invoices.reverse()}   // najnowsze na górze
+function allocNote(e){const a=allocOf.get(e.id);if(!a)return"";
+  const t=a.list.length===1&&!a.free?`→ ${esc(a.list[0].doc)}`:"→ "+a.list.map(x=>`${esc(x.doc)} (${fmtQ(x.qty)})`).join(", ")+(a.free?` · ${fmtQ(a.free)} bez faktury`:"");
+  return `<div class="sub">${t}</div>`}
+const invOpenSet=new Set();
+function renderInvoices(){const box=$("#invList");if(!box)return;
+  const q=$("#invSearch").value.trim().toLowerCase();
+  const l=invoices.filter(inv=>(invFilter==="all"||(invFilter==="open")!==inv.closed)
+    &&(!q||inv.doc.toLowerCase().includes(q)||inv.lines.some(x=>x.name.toLowerCase().includes(q)||x.allocs.some(a=>String(a.pp).toLowerCase().includes(q)))));
+  if(!l.length){box.innerHTML=`<div class="empty">${invoices.length?(q?"Nic nie pasuje do wyszukiwania.":invFilter==="open"?"Wszystkie faktury są zamknięte 👍":"Brak zamkniętych faktur."):"Nie ma jeszcze faktur. Dodaj pierwszą przyciskiem „+ Nowa faktura” albo przy przyjęciu produktu wpisz numer faktury."}</div>`;return}
+  box.innerHTML=l.map(inv=>{const left=inv.total-inv.used;
+    return `<details class="inv" data-inv="${esc(inv.key)}"${invOpenSet.has(inv.key)?" open":""}><summary>
+      <div class="ihead"><span class="idoc">${esc(inv.doc)}</span><span class="pill ${inv.closed?"closed":"open"}">${inv.closed?"Zamknięta":"Otwarta"}</span></div>
+      <div class="sub">${esc(inv.at)} · ${inv.closed?`rozliczono ${fmtQ(inv.total)} szt.`:`zostało ${fmtQ(left)} z ${fmtQ(inv.total)} szt.`}</div>
+      <div class="ilines">${inv.lines.map(x=>{const u=Math.min(x.used,x.qty),pc=x.qty?Math.round(u/x.qty*100):0;
+        return `<div class="il"><span>${esc(x.name)}</span><span class="q">${fmtQ(u)} / ${fmtQ(x.qty)}</span><div class="bar"><i class="${u>=x.qty?"full":""}" style="width:${pc}%"></i></div></div>`}).join("")}</div>
+      <span class="more">Pokaż, na jakie PP poszło ›</span></summary>
+      <div class="alloc">${inv.lines.map(x=>`<div><h4>${esc(x.name)}</h4>${x.allocs.length?`<div class="scroll"><table><tbody>${x.allocs.slice().reverse().map(a=>`<tr><td class="ppc">PP ${esc(a.pp)}</td><td class="n">${fmtQ(a.qty)} szt.</td><td class="sub">${esc(a.at)} ${esc(a.by)}</td></tr>`).join("")}</tbody></table></div>`:'<div class="note">Jeszcze nic nie wydano.</div>'}</div>`).join("")}</div></details>`}).join("")}
+$("#invList").addEventListener("toggle",e=>{const d=e.target.closest("[data-inv]");if(!d)return;d.open?invOpenSet.add(d.dataset.inv):invOpenSet.delete(d.dataset.inv)},true);
+$("#invFilter").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;invFilter=b.dataset.f;
+  $("#invFilter").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderInvoices()};
+$("#invSearch").oninput=renderInvoices;
+$("#invCsv").onclick=()=>{if(!invoices.length)return toast("Brak faktur",true);
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const rows=[];invoices.forEach(inv=>inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty);
+    rows.push([inv.doc,inv.at,x.name,x.code,x.qty,u,x.qty-u,inv.closed?"Zamknięta":"Otwarta",x.allocs.map(a=>`PP ${a.pp}: ${a.qty}`).join(", ")].map(q).join(";"))}));
+  const csv="\ufeff"+["Faktura;Data;Produkt;Kod;Na fakturze;Wydano;Zostało;Status;Wydania",...rows].join("\r\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="faktury-"+dayStr(new Date())+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)};
+
+/* --- nowa faktura (kilka produktów naraz) --- */
+let invEd=null;
+function openInvEditor(){invEd={lines:[]};$("#invDoc").value="";$("#invDocNote").hidden=true;$("#invQ").value="";$("#invPick").hidden=true;
+  renderInvLines();$("#invEditor").hidden=false;$("#invNew").hidden=true;$("#invDoc").focus()}
+function closeInvEditor(){invEd=null;$("#invEditor").hidden=true;$("#invNew").hidden=false}
+function renderInvLines(){$("#invLines").innerHTML=invEd.lines.length?invEd.lines.map((l,i)=>`<div class="setline"><span class="nm">${esc(itemBy(l.code).name)}</span>
+  <div class="qty"><input type="number" inputmode="numeric" min="1" value="${l.qty}" data-iq="${i}" aria-label="Ilość"></div><button class="x" data-ix="${i}" aria-label="Usuń z faktury">✕</button></div>`).join("")
+  :`<div class="note">Dodaj produkty z faktury z listy poniżej.</div>`;invSum()}
+function invSum(){const n=invEd?invEd.lines.filter(l=>l.qty>0):[];$("#invSum").textContent=n.length?`Razem: ${fmtQ(n.reduce((a,l)=>a+l.qty,0))} szt., ${n.length} ${plProd(n.length)}`:""}
+function renderInvPick(){const box=$("#invPick");if(box.hidden)return;const q=$("#invQ").value.trim().toLowerCase();
+  const l=items.filter(i=>!q||i.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+  box.innerHTML=l.length?l.map(i=>{const inIt=invEd&&invEd.lines.some(x=>x.code===i.code);
+    return `<button type="button" role="option" data-iadd="${esc(i.code)}"><span class="pn">${esc(i.name)}</span><span class="ps">${inIt?"już na fakturze":"dodaj"}</span></button>`}).join("")
+    :`<div class="none">Nie znaleziono produktu. Nowy produkt dodasz w zakładce „Produkty”.</div>`}
+$("#invNew").onclick=openInvEditor;$("#invEdClose").onclick=closeInvEditor;
+$("#invDoc").oninput=()=>{$("#invDocNote").hidden=!invoices.some(x=>x.key===invKey($("#invDoc").value))||!$("#invDoc").value.trim()};
+$("#invQ").onfocus=()=>{$("#invPick").hidden=false;renderInvPick()};
+$("#invQ").oninput=()=>{$("#invPick").hidden=false;renderInvPick()};
+$("#invQ").onkeydown=e=>{if(e.key==="Enter"){const f=$("#invPick [data-iadd]");if(f)f.click()}if(e.key==="Escape")$("#invPick").hidden=true};
+document.addEventListener("click",e=>{if(!e.target.closest("#invEditor .pick"))$("#invPick").hidden=true});
+$("#invPick").addEventListener("click",e=>{const b=e.target.closest("[data-iadd]");if(!b||!invEd)return;
+  let i=invEd.lines.findIndex(x=>x.code===b.dataset.iadd);if(i<0){invEd.lines.push({code:b.dataset.iadd,qty:1});i=invEd.lines.length-1;renderInvLines()}
+  $("#invQ").value="";$("#invPick").hidden=true;const inp=$(`#invLines [data-iq="${i}"]`);if(inp){inp.focus();inp.select()}});
+$("#invLines").addEventListener("input",e=>{const i=e.target.dataset.iq;if(i!==undefined&&invEd){invEd.lines[i].qty=Math.max(0,Math.round(Number(e.target.value)||0));invSum()}});
+$("#invLines").addEventListener("click",e=>{const b=e.target.closest("[data-ix]");if(!b||!invEd)return;invEd.lines.splice(Number(b.dataset.ix),1);renderInvLines()});
+$("#invSave").onclick=async()=>{if(!invEd)return;const doc=$("#invDoc").value.trim();
+  if(!doc){$("#invDoc").focus();return toast("Wpisz numer faktury",true)}
+  const lines=invEd.lines.filter(l=>l.qty>0);if(!lines.length)return toast("Dodaj co najmniej jeden produkt z ilością",true);
+  if(!me){toast("Najpierw ustaw swoje imię (u góry)",true);$("#who").click();return}
+  const b=$("#invSave");b.disabled=true;b.textContent="Zapisuję…";
+  try{const r=await post({action:"addInvoice",doc,by:me,lines});toast(`Zapisano fakturę ${doc}: ${r.saved} ${plProd(r.saved)}`);
+    invOpenSet.add(invKey(doc));closeInvEditor();invFilter="open";$("#invFilter").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.f==="open"));await loadEntries()}
+  catch(err){toast("Nie zapisano: "+err.message,true)}finally{b.disabled=false;b.textContent="Zapisz fakturę"}};
 
 /* ===== Zestawy (szablony wydań) ===== */
 const itemBy=c=>items.find(i=>i.code===c);
