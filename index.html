@@ -314,9 +314,15 @@ async function post(body){
   if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
   const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({...body,token:pin})});
   const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
-async function loadItems(){try{items=(await api("items")).items.map(i=>({...i,min:i.min||0}));renderProd();renderFilter();renderStany();renderPick()}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
+/* Odświeżanie w tle nie może zamknąć otwartego potwierdzenia („Usuń / Anuluj”) ani edycji minimum */
+let refreshing=false;
+function keepOpen(el){return refreshing&&!!el.querySelector(".confirm:not(.busy),.minedit:not(.busy)")}
+/* Przyciski potwierdzenia pojawiają się pod palcem — ignorujemy dotknięcia w pierwszych 450 ms (podwójne tapnięcie) */
+const ARM_MS=450;
+const armed=b=>{const box=b.closest("[data-at]");return !box||Date.now()-Number(box.dataset.at)>=ARM_MS};
+async function loadItems(){try{items=(await api("items")).items.map(i=>({...i,min:i.min||0}));refreshing=true;try{renderProd();renderFilter();renderStany();renderPick()}finally{refreshing=false}}catch(e){if(!e.pin)toast("Nie można pobrać produktów: "+e.message,true)}}
 async function loadEntries(){try{const j=await api("entries",{limit:5000});
-  entries=j.entries.map(e=>({...e,type:e.type||"W",doc:e.doc||""}));stock=j.stock||calcStock(entries);renderEntries()}catch(e){$("#recent").innerHTML=`<div class="empty">${e.pin?"Wpisz PIN, żeby zobaczyć wpisy.":esc(e.message)}</div>`}}
+  entries=j.entries.map(e=>({...e,type:e.type||"W",doc:e.doc||""}));stock=j.stock||calcStock(entries);refreshing=true;try{renderEntries()}finally{refreshing=false}}catch(e){$("#recent").innerHTML=`<div class="empty">${e.pin?"Wpisz PIN, żeby zobaczyć wpisy.":esc(e.message)}</div>`}}
 
 /* zakładki */
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
@@ -344,7 +350,7 @@ const histList=()=>{const pp=$("#fPP").value.trim(),it=$("#fItem").value,ty=$("#
   l.sort((a,b)=>a.e.at<b.e.at?-1:a.e.at>b.e.at?1:b.i-a.i);
   if(histSort==="desc")l.reverse();
   return l.map(x=>x.e)};
-function renderHist(){const l=histList();
+function renderHist(){if(keepOpen($("#histBody")))return;const l=histList();
   $("#histEmpty").hidden=l.length>0;
   $("#histBody").innerHTML=l.map(e=>`<tr><td>${esc(e.name)}<div class="sub">${esc(e.at)} ${esc(e.by)}</div></td><td class="ppc">${opCell(e)}</td><td class="n">${qtyCell(e)}</td><td><button class="del" data-del="${esc(e.id)}" aria-label="Usuń wpis">✕</button></td></tr>`).join("");
   const t={};l.filter(e=>e.type==="W").forEach(e=>t[e.name]=(t[e.name]||0)+e.qty);
@@ -353,14 +359,15 @@ $("#fPP").oninput=renderHist;$("#fItem").onchange=renderHist;$("#fType").onchang
 $("#fFrom").onchange=renderHist;$("#fTo").onchange=renderHist;
 $("#hSort").onclick=e=>{const b=e.target.closest("[data-s]");if(!b)return;histSort=b.dataset.s;
   $("#hSort").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderHist()};
-function renderProd(){$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button><button class="del" data-delitem="${esc(i.code)}" data-nm="${esc(i.name)}" aria-label="Usuń produkt">✕</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
+function renderProd(){if(keepOpen($("#prodList")))return;$("#prodList").innerHTML=items.length?items.map(i=>`<div class="prod"><div class="meta"><div class="nm">${esc(i.name)}</div><div class="code">${esc(i.code)}</div></div><button class="btn" data-qr="${esc(i.code)}" data-nm="${esc(i.name)}">Pobierz QR</button><button class="del" data-delitem="${esc(i.code)}" data-nm="${esc(i.name)}" aria-label="Usuń produkt">✕</button></div>`).join(""):`<div class="empty">Brak produktów.</div>`}
 
 /* naklejka QR */
 $("#prodList").addEventListener("click",async e=>{
   const d=e.target.closest("[data-delitem]"),yes=e.target.closest("[data-yesitem]"),no=e.target.closest("[data-noitem]");
-  if(d){const row=d.closest(".prod");row.querySelector(".meta").insertAdjacentHTML("beforeend",`<div class="confirm" style="justify-content:flex-start;margin-top:8px"><span class="note">Usunąć z listy? Historia wpisów zostanie.</span><button class="btn" data-yesitem="${esc(d.dataset.delitem)}">Usuń</button><button class="btn ghost" data-noitem>Anuluj</button></div>`);d.remove();return}
+  if(d){const row=d.closest(".prod");row.querySelector(".meta").insertAdjacentHTML("beforeend",`<div class="confirm" data-at="${Date.now()}" style="justify-content:flex-start;margin-top:8px"><span class="note">Usunąć z listy? Historia wpisów zostanie.</span><button class="btn" data-yesitem="${esc(d.dataset.delitem)}">Usuń</button><button class="btn ghost" data-noitem>Anuluj</button></div>`);d.remove();return}
+  if((yes||no)&&!armed(yes||no))return;
   if(no){renderProd();return}
-  if(yes){yes.disabled=true;try{await post({action:"deleteItem",code:yes.dataset.yesitem});toast("Usunięto produkt");await loadItems()}catch(err){toast(err.message,true);renderProd()}}
+  if(yes){yes.disabled=true;yes.closest(".confirm").classList.add("busy");try{await post({action:"deleteItem",code:yes.dataset.yesitem});toast("Usunięto produkt");await loadItems()}catch(err){toast(err.message,true);renderProd()}}
 });
 $("#prodList").onclick=e=>{const b=e.target.closest("[data-qr]");if(!b)return;
   const code=b.dataset.qr,name=b.dataset.nm,q=qrcode(0,"M");q.addData(code);q.make();
@@ -550,7 +557,7 @@ function renderItemStats(){
 /* stany magazynowe */
 let sFilter="all";
 const isLow=i=>i.min>0&&stanOf(i.code)<i.min;
-function renderStany(){
+function renderStany(){if(keepOpen($("#stanList")))return;
   const low=items.filter(isLow);$("#lowDot").hidden=!low.length;
   $("#sKpi").innerHTML=`<div class="kpi"><b>${fmtQ(items.length)}</b><span>produktów</span></div><div class="kpi"><b class="${low.length?"neg":""}">${fmtQ(low.length)}</b><span>do zamówienia</span></div><div class="kpi"><b>${fmtQ(items.reduce((a,i)=>a+Math.max(0,stanOf(i.code)),0))}</b><span>sztuk razem</span></div>`;
   const q=$("#sSearch").value.trim().toLowerCase();
@@ -566,15 +573,16 @@ $("#sSearch").oninput=renderStany;
 $("#stanList").addEventListener("click",async e=>{
   const m=e.target.closest("[data-min]"),ok=e.target.closest("[data-minok]"),no=e.target.closest("[data-minno]");
   if(m){const it=items.find(i=>i.code===m.dataset.min);if(!it)return;
-    m.outerHTML=`<div class="minedit"><input type="number" inputmode="numeric" min="0" value="${it.min||""}" placeholder="min" aria-label="Minimalny stan"><button class="btn primary" data-minok="${esc(it.code)}">OK</button><button class="btn ghost" data-minno>✕</button></div>`;
+    m.outerHTML=`<div class="minedit" data-at="${Date.now()}"><input type="number" inputmode="numeric" min="0" value="${it.min||""}" placeholder="min" aria-label="Minimalny stan"><button class="btn primary" data-minok="${esc(it.code)}">OK</button><button class="btn ghost" data-minno>✕</button></div>`;
     $("#stanList .minedit input").focus();return}
+  if((ok||no)&&!armed(ok||no))return;
   if(no){renderStany();return}
-  if(ok){const it=items.find(i=>i.code===ok.dataset.minok),v=Math.max(0,Number(ok.parentElement.querySelector("input").value)||0);ok.disabled=true;
+  if(ok){const it=items.find(i=>i.code===ok.dataset.minok),v=Math.max(0,Number(ok.parentElement.querySelector("input").value)||0);ok.disabled=true;ok.closest(".minedit").classList.add("busy");
     try{await post({action:"setMin",code:it.code,min:v});it.min=v;toast(v?`Minimum dla ${it.name}: ${fmtQ(v)} szt.`:`Usunięto minimum dla ${it.name}`)}
     catch(err){toast("Nie zapisano: "+err.message,true)}
     renderStany()}
 });
-$("#stanList").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.closest(".minedit"))e.target.parentElement.querySelector("[data-minok]").click()});
+$("#stanList").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.closest(".minedit")){e.target.closest(".minedit").dataset.at=0;e.target.parentElement.querySelector("[data-minok]").click()}});
 $("#stanCsv").onclick=()=>{if(!items.length)return toast("Brak produktów",true);
   const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
   const csv="\ufeff"+["Produkt;Kod;Stan;Min;Do zamówienia",...items.map(i=>{const st=stanOf(i.code);return[i.name,i.code,st,i.min||"",isLow(i)?i.min-st:""].map(q).join(";")})].join("\r\n");
@@ -584,9 +592,10 @@ $("#stanCsv").onclick=()=>{if(!items.length)return toast("Brak produktów",true)
 /* usuwanie wpisu z potwierdzeniem */
 $("#histBody").addEventListener("click",async ev=>{
   const del=ev.target.closest("[data-del]"),yes=ev.target.closest("[data-yes]"),no=ev.target.closest("[data-no]");
-  if(del){del.parentElement.innerHTML=`<div class="confirm"><button class="btn" data-yes="${esc(del.dataset.del)}">Usuń</button><button class="btn ghost" data-no>Anuluj</button></div>`;return}
+  if(del){del.parentElement.innerHTML=`<div class="confirm" data-at="${Date.now()}"><button class="btn" data-yes="${esc(del.dataset.del)}">Usuń</button><button class="btn ghost" data-no>Anuluj</button></div>`;return}
+  if((yes||no)&&!armed(yes||no))return;
   if(no){renderHist();return}
-  if(yes){yes.disabled=true;yes.textContent="…";
+  if(yes){yes.disabled=true;yes.textContent="…";yes.closest(".confirm").classList.add("busy");
     try{await post({action:"deleteEntry",id:yes.dataset.yes});toast("Usunięto wpis");await loadEntries()}
     catch(e){toast("Nie usunięto: "+e.message,true);renderHist()}}
 });
