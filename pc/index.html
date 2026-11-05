@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b1e1c">
+<title>Magazyn QR — komputer</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<script src="../lib/qrcode.js"></script>
+<script>
+/* Wersja na komputer. Te same dane co w telefonie (ten sam Apps Script i ta sama tabela),
+   ale osobna strona — wersja na telefon nie jest tu w ogóle zmieniana.
+   Przy każdej zmianie podnieś PC_VER (komputer pokaże „Jest nowa wersja”). */
+const PC_VER = "1";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";
+</script>
+<style>
+:root{
+  --bg:#f3f4f1;--surface:#fff;--fg:#1b1e1c;--muted:#5f6660;--line:#d9dcd6;--soft:#eef0ec;
+  --accent:#f2b705;--accent-ink:#1b1e1c;--err:#b3261e;--ok:#2e7d32;--warn-bg:#fff4cc;
+  --side:#1b1e1c;--side-fg:#f3f4f1;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--soft:#252926;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;--warn-bg:#3a3214;color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45;display:flex}
+/* --- menu boczne --- */
+aside{width:220px;flex:none;background:var(--side);color:var(--side-fg);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{font-family:var(--display);font-weight:700;font-size:26px;white-space:nowrap;letter-spacing:.02em;text-transform:uppercase;padding:18px 20px 4px}
+.brand span{color:#f5c22b}
+.brand small{display:block;font:500 12px var(--body);letter-spacing:.08em;opacity:.6;text-transform:uppercase}
+aside nav{display:flex;flex-direction:column;padding:16px 10px;gap:2px}
+aside nav button{display:flex;align-items:center;gap:10px;background:none;border:0;color:inherit;opacity:.75;font:600 15px var(--body);text-align:left;padding:9px 12px;border-radius:5px;cursor:pointer;border-left:3px solid transparent}
+aside nav button:hover{opacity:1;background:rgba(255,255,255,.06)}
+aside nav button[aria-current="page"]{opacity:1;background:rgba(245,194,43,.12);border-left-color:#f5c22b}
+aside nav .cnt{margin-left:auto;font:600 12px var(--mono);background:#f5c22b;color:#1b1e1c;border-radius:9px;padding:0 7px}
+.sidefoot{margin-top:auto;padding:14px 20px 18px;font-size:13px;display:flex;flex-direction:column;gap:6px;opacity:.85}
+.sidefoot button,.sidefoot a{background:none;border:0;color:inherit;font:inherit;padding:0;text-align:left;cursor:pointer;text-decoration:underline dotted}
+/* --- treść --- */
+main{flex:1;min-width:0;padding:22px 28px 60px}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-family:var(--display);font-weight:700;font-size:30px;text-transform:uppercase;letter-spacing:.03em;margin:0;margin-right:auto}
+h2{font-family:var(--display);font-weight:700;font-size:20px;text-transform:uppercase;letter-spacing:.03em;margin:0 0 10px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.bar .grow{flex:1}
+.note{color:var(--muted);font-size:13px}
+.label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+input,select{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:7px 10px;min-width:0}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+input.bad{border-color:var(--err);background:color-mix(in srgb,var(--err) 8%,var(--surface))}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent)}
+.btn{font:600 14px var(--body);border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:5px;padding:7px 14px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--err)}
+.btn.small{padding:3px 9px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--fg);font:600 14px var(--body);padding:7px 14px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+/* --- tabele --- */
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:auto;max-height:calc(100vh - 190px)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{position:sticky;top:0;background:var(--soft);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;z-index:1}
+th.sort{cursor:pointer;user-select:none}
+th.sort:hover{color:var(--fg)}
+th[data-dir="asc"]::after{content:" ▲"}th[data-dir="desc"]::after{content:" ▼"}
+tbody tr:hover{background:var(--soft)}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.code{font:500 12.5px var(--mono);color:var(--muted);white-space:nowrap}
+.sub{font-size:12.5px;color:var(--muted)}
+td.sub{white-space:nowrap}
+tr.low td{background:var(--warn-bg)}
+.neg{color:var(--err);font-weight:600}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:3px;padding:1px 7px;background:var(--soft);white-space:nowrap}
+.tag.W{background:#e3ecf9;color:#1d4f91}.tag.P{background:#e1f3e3;color:#1f6b2a}.tag.K{background:#f3e6f7;color:#6b2a80}
+@media (prefers-color-scheme:dark){.tag.W{background:#1f3047;color:#9cc2f2}.tag.P{background:#1d3a22;color:#8fd49b}.tag.K{background:#3a2442;color:#d9a6ea}}
+.pill{font-size:12px;font-weight:600;border-radius:10px;padding:1px 9px;white-space:nowrap}
+.pill.open{background:var(--warn-bg);color:#7a5a00}.pill.closed{background:#e1f3e3;color:#1f6b2a}
+@media (prefers-color-scheme:dark){.pill.open{color:#f5c22b}.pill.closed{background:#1d3a22;color:#8fd49b}}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.cellbtn{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;border-bottom:1px dashed var(--muted)}
+.cellin{width:80px;padding:3px 6px;text-align:right}
+.more{display:block;margin:10px auto 0}
+/* --- pulpit --- */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.tile:hover{border-color:var(--muted)}
+.tile b{display:block;font:700 34px var(--display);line-height:1.1}
+.tile.warn{border-left:4px solid var(--accent)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.grid2 .tbl{max-height:420px}
+/* --- operacje --- */
+.ops{max-width:880px}
+.oprow{display:grid;grid-template-columns:1fr 110px 150px 90px 36px;gap:8px;align-items:center;margin-bottom:6px}
+.oprow.rec{grid-template-columns:1fr 110px 90px 36px}
+.oprow .st{font-size:12.5px;color:var(--muted);text-align:right}
+.ophead{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+.x{background:none;border:0;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
+.x:hover{color:var(--err)}
+/* --- faktury --- */
+.split{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start}
+.split .tbl{max-height:calc(100vh - 200px)}
+tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
+.detail{position:sticky;top:12px;max-height:calc(100vh - 40px);overflow:auto}
+.detail h3{font:700 22px var(--display);margin:0 0 2px;text-transform:uppercase}
+.detail h4{margin:16px 0 6px;font-size:15px;display:flex;justify-content:space-between;gap:10px}
+.prog{height:6px;background:var(--soft);border-radius:3px;overflow:hidden;margin-bottom:6px}
+.prog i{display:block;height:100%;background:var(--accent)}.prog i.full{background:var(--ok)}
+.detail table td,.detail table th{padding:4px 8px}
+/* --- etykiety --- */
+.lblset{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap}
+.lblset label{display:flex;flex-direction:column;gap:4px}
+.preview{display:flex;gap:18px;align-items:center;margin-top:14px}
+.previewbox{background:repeating-conic-gradient(var(--soft) 0 25%,transparent 0 50%) 0 0/12px 12px;padding:16px;border-radius:6px;border:1px solid var(--line)}
+.previewbox .lbl{box-shadow:0 1px 4px rgba(0,0,0,.25);zoom:2}
+.lbl{width:50mm;background:#fff;color:#000;display:flex;align-items:center;gap:1.5mm;padding:1.5mm 2mm;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+.lbl svg{flex:none;display:block}
+.lbl .t{min-width:0;flex:1;display:flex;flex-direction:column;gap:.8mm}
+.lbl .nm{font-weight:700;line-height:1.1;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;word-break:break-word}
+.lbl .cd{font:500 2.2mm/1.1 ui-monospace,Consolas,monospace;word-break:break-all}
+.qtyin{width:60px;text-align:right;padding:3px 6px}
+/* --- okna, komunikaty --- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:40}
+.modal .panel{width:min(420px,92vw);display:flex;flex-direction:column;gap:12px}
+.modal .msg{color:var(--err);font-weight:600}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:6px;font-weight:600;z-index:50;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+.toast.err{background:var(--err);color:#fff}
+.upd{position:fixed;top:14px;right:18px;z-index:45;background:#f5c22b;color:#1b1e1c;border:0;border-radius:6px;padding:10px 16px;font:700 15px var(--body);cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+.confirm{display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+#printArea{display:none}
+@media (max-width:1100px){.split{grid-template-columns:1fr}.detail{position:static;max-height:none}.tiles{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}}
+@media (max-width:760px){body{flex-direction:column}aside{width:auto;height:auto;position:static}aside nav{flex-direction:row;flex-wrap:wrap}.sidefoot{display:none}main{padding:16px}}
+/* --- druk: tylko zawartość #printArea --- */
+@media print{
+  body{display:block;background:#fff;color:#000}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block}
+  .rep{font:10pt Arial,sans-serif;color:#000}
+  .rep h1{font:bold 15pt Arial;margin:0 0 2mm;text-transform:none;letter-spacing:0}
+  .rep h2{font:bold 12pt Arial;margin:6mm 0 1.5mm;text-transform:none;letter-spacing:0;break-after:avoid}
+  .rep table{border-collapse:collapse;width:100%;margin-bottom:2mm}
+  .rep th,.rep td{border:.2mm solid #999;padding:1mm 2mm;font-size:9pt;position:static;background:none;color:#000;text-transform:none;letter-spacing:0}
+  .rep th{background:#eee;font-weight:bold}
+  .rep tbody tr:last-child td{border-bottom:.2mm solid #999}
+  .rep .inv{break-inside:avoid}
+  .rep .meta{font-size:9pt;color:#444}
+  .lblpage{break-after:page;page-break-after:always;overflow:hidden}
+  .lblpage:last-child{break-after:auto;page-break-after:auto}
+}
+</style>
+<style id="pageStyle"></style>
+</head>
+<body>
+<aside>
+  <div class="brand">Magazyn <span>QR</span><small>wersja na komputer</small></div>
+  <nav id="nav">
+    <button data-v="pulpit">Pulpit</button>
+    <button data-v="stany">Stany <span class="cnt" id="lowCnt" hidden></span></button>
+    <button data-v="ops">Wydanie / przyjęcie</button>
+    <button data-v="hist">Historia</button>
+    <button data-v="fakt">Faktury <span class="cnt" id="invCnt" hidden></span></button>
+    <button data-v="prod">Produkty i etykiety</button>
+  </nav>
+  <div class="sidefoot">
+    <button id="who"></button>
+    <button id="refresh">Odśwież dane</button>
+    <span id="lastLoad" class="note" style="color:inherit;opacity:.7"></span>
+    <a href="../">Wersja na telefon</a>
+    <span style="opacity:.5">Wersja PC <script>document.write(PC_VER)</script></span>
+  </div>
+</aside>
+
+<main>
+<!-- PULPIT -->
+<section id="v-pulpit" hidden>
+  <div class="top"><h1>Pulpit</h1><span class="note" id="today"></span></div>
+  <div class="tiles" id="tiles"></div>
+  <div class="grid2">
+    <div><h2>Do zamówienia</h2><div class="tbl" id="pLow"></div></div>
+    <div><h2>Otwarte faktury</h2><div class="tbl" id="pInv"></div></div>
+    <div><h2>Najczęściej wydawane — 30 dni</h2><div class="tbl" id="pTop"></div></div>
+    <div><h2>Ostatnie wpisy</h2><div class="tbl" id="pLast"></div></div>
+  </div>
+</section>
+
+<!-- STANY -->
+<section id="v-stany" hidden>
+  <div class="top"><h1>Stany</h1>
+    <button class="btn" id="spisBtn">Inwentaryzacja (spis)</button>
+    <button class="btn" id="stPrint">Drukuj</button>
+    <button class="btn primary" id="stXlsx">Pobierz do Excela</button></div>
+  <div class="bar"><input id="stQ" class="grow" placeholder="Szukaj produktu albo kodu…">
+    <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="stLow"> tylko do zamówienia</label></div>
+  <div class="panel" id="spisBar" hidden style="margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <div class="grow" style="flex:1"><b>Tryb spisu.</b> <span class="note">Wpisz w kolumnie „Policzono”, ile jest naprawdę na półce. Puste pola są pomijane. Zapis dodaje korektę do historii — tak samo jak inwentaryzacja w telefonie.</span></div>
+    <span id="spisInfo" class="note"></span>
+    <button class="btn" id="spisCancel">Anuluj</button><button class="btn primary" id="spisSave">Zapisz spis</button></div>
+  <div class="tbl" id="stTbl"></div>
+  <p class="note">Kliknij liczbę w kolumnie „Min”, żeby ustawić minimum. Wiersze na żółto — stan poniżej minimum.</p>
+</section>
+
+<!-- WYDANIE / PRZYJĘCIE -->
+<section id="v-ops" hidden>
+  <div class="top"><h1>Wydanie / przyjęcie</h1></div>
+  <div class="ops">
+    <div class="bar"><div class="seg" id="opMode"><button data-m="W" aria-pressed="true">Wydanie na PP</button><button data-m="P" aria-pressed="false">Przyjęcie / faktura</button></div></div>
+    <div class="panel">
+      <div id="opDoc" hidden style="margin-bottom:14px"><div class="label" style="margin-bottom:4px">Numer faktury / dokumentu</div>
+        <input id="opDocIn" style="width:320px" placeholder="np. FV 123/2026 (puste = bez faktury)">
+        <div class="note" style="margin-top:4px">Z numerem faktury wydania będą z niej schodzić automatycznie (najstarsza faktura najpierw).</div></div>
+      <div id="opHead"></div>
+      <div id="opRows"></div>
+      <div class="bar" style="margin:10px 0 0"><button class="btn" id="opAdd">+ Wiersz</button><span class="note grow">Enter w ostatnim polu dodaje nowy wiersz. Produkt możesz wpisać nazwą albo kodem.</span>
+        <span id="opSum" class="note"></span><button class="btn primary" id="opSave">Zapisz</button></div>
+    </div>
+  </div>
+  <datalist id="prodList"></datalist>
+</section>
+
+<!-- HISTORIA -->
+<section id="v-hist" hidden>
+  <div class="top"><h1>Historia</h1><button class="btn primary" id="hXlsx">Pobierz do Excela</button></div>
+  <div class="bar">
+    <label class="note">od <input type="date" id="hFrom"></label><label class="note">do <input type="date" id="hTo"></label>
+    <select id="hItem"></select>
+    <select id="hType"><option value="">Wszystkie operacje</option><option value="W">Wydania</option><option value="P">Przyjęcia</option><option value="K">Inwentaryzacja</option></select>
+    <select id="hBy"></select>
+    <input id="hPP" placeholder="PP" style="width:90px">
+    <input id="hQ" class="grow" placeholder="Szukaj (dokument, faktura…)">
+    <button class="btn" id="hClear">Wyczyść</button>
+  </div>
+  <div class="note" id="hSum" style="margin-bottom:8px"></div>
+  <div class="tbl" id="hTbl"></div>
+</section>
+
+<!-- FAKTURY -->
+<section id="v-fakt" hidden>
+  <div class="top"><h1>Faktury</h1>
+    <button class="btn" id="fNew">+ Nowa faktura</button>
+    <button class="btn" id="fPrint">Drukuj raport</button>
+    <button class="btn primary" id="fXlsx">Raport dla księgowości (Excel)</button></div>
+  <div class="bar">
+    <div class="seg" id="fStatus"><button data-f="open" aria-pressed="true">Otwarte</button><button data-f="closed" aria-pressed="false">Zamknięte</button><button data-f="all" aria-pressed="false">Wszystkie</button></div>
+    <select id="fBy"><option value="inv">okres wg daty faktury</option><option value="closed">okres wg daty zamknięcia</option></select>
+    <label class="note">od <input type="date" id="fFrom"></label><label class="note">do <input type="date" id="fTo"></label>
+    <input id="fQ" class="grow" placeholder="Szukaj: faktura, produkt, PP…">
+  </div>
+  <div class="split"><div class="tbl" id="fTbl"></div><div class="panel detail" id="fDetail"></div></div>
+  <p class="note">Raport i wydruk obejmują faktury widoczne na liście (po filtrach). Do księgowości zwykle: „Zamknięte” + okres wg daty zamknięcia.</p>
+</section>
+
+<!-- PRODUKTY I ETYKIETY -->
+<section id="v-prod" hidden>
+  <div class="top"><h1>Produkty i etykiety</h1></div>
+  <div class="panel" style="margin-bottom:16px">
+    <h2>Etykiety QR — Brother QL-800, taśma 50 mm</h2>
+    <div class="lblset">
+      <label><span class="label">Długość etykiety</span><select id="lLen"><option value="30">30 mm</option><option value="40">40 mm</option><option value="50">50 mm</option><option value="62">62 mm</option></select></label>
+      <label><span class="label">Rozmiar nazwy</span><select id="lFont"><option value="auto">automatycznie</option><option value="s">mała</option><option value="m">średnia</option><option value="l">duża</option></select></label>
+      <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="lCode" checked> pokaż kod pod nazwą</label>
+      <span class="grow" style="flex:1"></span>
+      <span class="note" id="lSel">Zaznacz produkty w tabeli poniżej.</span>
+      <button class="btn primary" id="lPrint" disabled>Drukuj etykiety</button>
+    </div>
+    <div class="preview"><div class="previewbox" id="lPrev"></div>
+      <div class="note" style="max-width:420px">Podgląd w skali 2:1. <b>Pierwszy raz:</b> w oknie drukowania wybierz drukarkę QL-800, „Więcej ustawień” → rozmiar papieru <b>50 mm</b> (taśma ciągła), marginesy <b>Brak</b>, skala <b>100%</b>, bez nagłówków i stopek. Najpierw wydrukuj 1 sztukę na próbę.</div></div>
+  </div>
+  <div class="bar">
+    <input id="prQ" class="grow" placeholder="Szukaj produktu…">
+    <input id="prName" placeholder="Nazwa nowego produktu" style="width:240px">
+    <input id="prCode" placeholder="Kod (opcjonalnie)" style="width:170px">
+    <button class="btn primary" id="prAdd">Dodaj produkt</button>
+  </div>
+  <div class="tbl" id="prTbl"></div>
+</section>
+</main>
+
+<div id="printArea"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+const fmtQ=n=>Number(n).toLocaleString("pl-PL");
+const pad2=n=>String(n).padStart(2,"0");
+const dayStr=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+const daysAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return dayStr(d)};
+const sgn=n=>(n>0?"+":n<0?"−":"±")+fmtQ(Math.abs(n));
+const OPN={W:"Wydanie",P:"Przyjęcie",K:"Inwentaryzacja"};
+function toast(t,err){const el=$("#toast");el.textContent=t;el.className="toast"+(err?" err":"");el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,3200)}
+
+let items=[],entries=[],stock={},loaded=false;
+let me=ls.get("mqr_name")||"";
+let pin=ls.get("mqr_pin")||"";
+
+/* ===== PIN i imię (ten sam PIN co w telefonie) ===== */
+function askPin(msg){
+  if($("#pinModal"))return;
+  const d=document.createElement("div");d.className="modal";d.id="pinModal";
+  d.innerHTML=`<div class="panel"><h2>Magazyn QR</h2>${msg?`<div class="msg">${esc(msg)}</div>`:`<div class="note">Wpisz PIN magazynu — ten sam co w telefonie. Komputer go zapamięta.</div>`}
+    <label><div class="label">PIN</div><input id="pinIn" type="password" autocomplete="off" style="width:100%"></label>
+    <label><div class="label">Twoje imię (widoczne przy wpisach)</div><input id="pinName" value="${esc(me)}" placeholder="np. Anton" style="width:100%"></label>
+    <button class="btn primary" id="pinOk">Wejdź</button></div>`;
+  document.body.append(d);$("#pinIn").focus();
+  const ok=()=>{const v=$("#pinIn").value.trim();if(!v)return $("#pinIn").focus();pin=v;ls.set("mqr_pin",v);
+    me=$("#pinName").value.trim();ls.set("mqr_name",me);renderWho();d.remove();loadAll()};
+  $("#pinOk").onclick=ok;d.addEventListener("keydown",e=>{if(e.key==="Enter")ok()})}
+function badPin(){pin="";ls.set("mqr_pin","");askPin("Zły PIN. Wpisz go jeszcze raz.")}
+function renderWho(){$("#who").textContent=me?"Ty: "+me:"Ustaw swoje imię"}
+$("#who").onclick=()=>{const v=prompt("Twoje imię (widoczne przy wpisach):",me);if(v===null)return;me=v.trim();ls.set("mqr_name",me);renderWho()};
+renderWho();
+
+/* ===== API — wszystko POST-em, PIN w treści ===== */
+async function post(body){
+  if(!pin){askPin();throw Object.assign(new Error("Wpisz PIN"),{pin:true})}
+  const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({...body,token:pin})});
+  const j=await r.json();if(!j.ok){const bad=/hasło|TOKEN/i.test(j.error);if(bad)badPin();throw Object.assign(new Error(j.error),{pin:bad})}return j}
+let loading=null,lastLoad=0;
+function loadAll(silent){
+  if(loading)return loading;
+  loading=(async()=>{try{
+    const [a,b]=await Promise.all([post({action:"items"}),post({action:"entries",limit:20000})]);
+    items=a.items.map(i=>({...i,min:i.min||0})).sort((x,y)=>x.name.localeCompare(y.name,"pl"));
+    entries=b.entries.map(e=>({...e,type:e.type||"W",doc:e.doc||""}));stock=b.stock||calcStock(entries);
+    loaded=true;lastLoad=Date.now();computeInvoices();computeLast();
+    $("#lastLoad").textContent="Dane z "+new Date().toLocaleTimeString("pl-PL",{hour:"2-digit",minute:"2-digit"});
+    renderSafe()}
+  catch(e){if(!e.pin)toast((silent?"Nie udało się odświeżyć: ":"Nie można pobrać danych: ")+e.message,true)}
+  finally{loading=null}})();
+  return loading}
+$("#refresh").onclick=async()=>{await loadAll();toast("Odświeżono")};
+/* odświeżanie w tle co 2 min i po powrocie do okna */
+setInterval(()=>{if(!document.hidden&&pin)loadAll(true)},120000);
+window.addEventListener("focus",()=>{if(pin&&Date.now()-lastLoad>60000)loadAll(true)});
+
+/* odświeżenie w tle nie może zabrać kursora z pola, w którym ktoś pisze */
+let pendingRender=false;
+function busyTyping(){const a=document.activeElement;return a&&a.closest&&a.closest(".tbl,#opRows")&&/INPUT|SELECT/.test(a.tagName)}
+function renderSafe(){if(busyTyping()){pendingRender=true;return}pendingRender=false;render()}
+document.addEventListener("focusout",()=>setTimeout(()=>{if(pendingRender&&!busyTyping())renderSafe()},50));
+
+function calcStock(l){const m={};l.forEach(e=>m[e.code]=(m[e.code]||0)+(e.type==="W"?-e.qty:e.qty));return m}
+const stanOf=c=>stock[c]||0;
+const isLow=i=>i.min>0&&stanOf(i.code)<i.min;
+let lastAt={};
+function computeLast(){lastAt={};for(const e of entries)if(!lastAt[e.code])lastAt[e.code]=e.at}
+const itemByCode=c=>items.find(i=>i.code===c);
+function findItem(s){s=String(s||"").trim();if(!s)return null;const l=s.toLowerCase();
+  return items.find(i=>i.code===s)||items.find(i=>i.code.toLowerCase()===l)||items.find(i=>i.name.toLowerCase()===l)||null}
+
+/* ===== Faktury (FIFO) — ta sama zasada co w telefonie =====
+   Faktura = przyjęcia z tym samym numerem dokumentu. Wydanie schodzi z najstarszej otwartej faktury
+   przyjętej PRZED wydaniem; nadwyżka na następną; brak otwartych = „bez faktury”. */
+let invoices=[],allocOf=new Map();
+const invKey=d=>String(d||"").trim().replace(/\s+/g," ").toUpperCase();
+function computeInvoices(){
+  const byKey=new Map(),openQ=new Map();invoices=[];allocOf=new Map();
+  for(let i=entries.length-1;i>=0;i--){const e=entries[i];
+    if(e.type==="P"&&e.doc){const k=invKey(e.doc);let inv=byKey.get(k);
+      if(!inv){inv={key:k,doc:e.doc.trim().replace(/\s+/g," "),at:e.at,lines:[]};byKey.set(k,inv);invoices.push(inv)}
+      let line=inv.lines.find(l=>l.code===e.code);
+      if(!line){line={code:e.code,name:e.name,qty:0,used:0,allocs:[]};inv.lines.push(line);
+        if(!openQ.has(e.code))openQ.set(e.code,[]);openQ.get(e.code).push({inv,line})}
+      line.qty+=e.qty;line.name=e.name}
+    else if(e.type==="W"){let left=e.qty;const out=[];
+      for(const x of openQ.get(e.code)||[]){if(left<=0)break;const free=x.line.qty-x.line.used;if(free<=0)continue;
+        const t=Math.min(free,left);x.line.used+=t;left-=t;x.line.allocs.push({pp:e.pp,qty:t,at:e.at,by:e.by});out.push({doc:x.inv.doc,qty:t})}
+      if(out.length)allocOf.set(e.id,{list:out,free:left})}}
+  invoices.forEach(inv=>{inv.total=inv.lines.reduce((a,l)=>a+l.qty,0);inv.used=inv.lines.reduce((a,l)=>a+Math.min(l.used,l.qty),0);
+    inv.closed=inv.used>=inv.total;
+    inv.closedAt=inv.closed?inv.lines.flatMap(l=>l.allocs.map(a=>a.at)).sort().pop()||inv.at:""});
+  invoices.reverse()}
+const allocText=e=>{const a=allocOf.get(e.id);if(!a)return"";
+  return a.list.map(x=>a.list.length>1||a.free?`${x.doc} (${fmtQ(x.qty)})`:x.doc).join(", ")+(a.free?`, bez faktury (${fmtQ(a.free)})`:"")};
+
+/* ===== nawigacja ===== */
+const VIEWS=["pulpit","stany","ops","hist","fakt","prod"];
+let view="pulpit";
+function go(v){if(!VIEWS.includes(v))v="pulpit";view=v;
+  VIEWS.forEach(k=>$("#v-"+k).hidden=k!==v);
+  $$("#nav button").forEach(b=>b.dataset.v===v?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));
+  if(location.hash.slice(1)!==v)history.replaceState(null,"","#"+v);
+  render()}
+$("#nav").onclick=e=>{const b=e.target.closest("[data-v]");if(b)go(b.dataset.v)};
+function render(){
+  const low=items.filter(isLow).length,open=invoices.filter(i=>!i.closed).length;
+  $("#lowCnt").hidden=!low;$("#lowCnt").textContent=low;$("#invCnt").hidden=!open;$("#invCnt").textContent=open;
+  if(!loaded)return;
+  ({pulpit:renderPulpit,stany:renderStany,ops:renderOpsAux,hist:renderHist,fakt:renderFakt,prod:renderProd})[view]()}
+
+/* sortowanie tabel: klik w nagłówek */
+function sortRows(list,key,dir,get){const m=dir==="asc"?1:-1;
+  return list.slice().sort((a,b)=>{const x=get(a,key),y=get(b,key);
+    return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"pl",{numeric:true}))*m})}
+function th(label,key,st,cls=""){return `<th class="sort ${cls}" data-sort="${key}"${st.key===key?` data-dir="${st.dir}"`:""}>${label}</th>`}
+function onSort(box,st,cb){box.addEventListener("click",e=>{const h=e.target.closest("th[data-sort]");if(!h)return;
+  const k=h.dataset.sort;st.dir=st.key===k&&st.dir==="asc"?"desc":"asc";st.key=k;cb()})}
+
+/* ===== PULPIT ===== */
+function renderPulpit(){
+  $("#today").textContent=new Date().toLocaleDateString("pl-PL",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  const low=items.filter(isLow),open=invoices.filter(i=>!i.closed),d7=daysAgo(6),today=dayStr(new Date());
+  const w7=entries.filter(e=>e.type==="W"&&e.at.slice(0,10)>=d7).reduce((a,e)=>a+e.qty,0);
+  const wToday=entries.filter(e=>e.type==="W"&&e.at.slice(0,10)===today).reduce((a,e)=>a+e.qty,0);
+  $("#tiles").innerHTML=`
+    <button class="tile" data-go="stany"><span class="label">Produkty</span><b>${fmtQ(items.length)}</b><span class="note">${fmtQ(Object.values(stock).reduce((a,x)=>a+Math.max(0,x),0))} szt. na stanie</span></button>
+    <button class="tile${low.length?" warn":""}" data-go="stany" data-low="1"><span class="label">Do zamówienia</span><b>${low.length}</b><span class="note">poniżej minimum</span></button>
+    <button class="tile${open.length?" warn":""}" data-go="fakt"><span class="label">Otwarte faktury</span><b>${open.length}</b><span class="note">${fmtQ(open.reduce((a,i)=>a+i.total-i.used,0))} szt. do rozliczenia</span></button>
+    <button class="tile" data-go="hist"><span class="label">Wydano</span><b>${fmtQ(wToday)}</b><span class="note">dziś · ${fmtQ(w7)} szt. w 7 dni</span></button>`;
+  $("#pLow").innerHTML=low.length?`<table><thead><tr><th>Produkt</th><th class="n">Stan</th><th class="n">Min</th><th class="n">Brakuje</th></tr></thead><tbody>${
+    low.sort((a,b)=>(stanOf(a.code)-a.min)-(stanOf(b.code)-b.min)).map(i=>`<tr><td>${esc(i.name)}</td><td class="n${stanOf(i.code)<0?" neg":""}">${fmtQ(stanOf(i.code))}</td><td class="n">${fmtQ(i.min)}</td><td class="n"><b>${fmtQ(i.min-stanOf(i.code))}</b></td></tr>`).join("")}</tbody></table>`
+    :`<div class="empty">${items.some(i=>i.min>0)?"Wszystkiego wystarczy 👍":"Ustaw minimum przy produktach w „Stany”, a tu pojawi się lista do zamówienia."}</div>`;
+  $("#pInv").innerHTML=open.length?`<table><thead><tr><th>Faktura</th><th>Data</th><th class="n">Wydano</th><th class="n">Zostało</th></tr></thead><tbody>${
+    open.map(i=>`<tr data-inv="${esc(i.key)}" style="cursor:pointer"><td>${esc(i.doc)}</td><td class="sub">${esc(i.at.slice(0,10))}</td><td class="n">${fmtQ(i.used)} / ${fmtQ(i.total)}</td><td class="n"><b>${fmtQ(i.total-i.used)}</b></td></tr>`).join("")}</tbody></table>`
+    :`<div class="empty">${invoices.length?"Wszystkie faktury rozliczone 👍":"Brak faktur."}</div>`;
+  const d30=daysAgo(29),top={};entries.forEach(e=>{if(e.type==="W"&&e.at.slice(0,10)>=d30)top[e.code]=(top[e.code]||0)+e.qty});
+  const tl=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  $("#pTop").innerHTML=tl.length?`<table><thead><tr><th>Produkt</th><th class="n">Wydano</th><th class="n">Stan</th></tr></thead><tbody>${
+    tl.map(([c,q])=>{const it=itemByCode(c);return `<tr><td>${esc(it?it.name:c)}</td><td class="n">${fmtQ(q)}</td><td class="n">${fmtQ(stanOf(c))}</td></tr>`}).join("")}</tbody></table>`:`<div class="empty">Brak wydań w ostatnich 30 dniach.</div>`;
+  $("#pLast").innerHTML=entries.length?`<table><tbody>${entries.slice(0,10).map(e=>`<tr><td class="sub" style="white-space:nowrap">${esc(e.at)}</td><td>${esc(e.name)}<div class="sub">${opText(e)}</div></td><td class="n">${e.type==="W"?fmtQ(e.qty):sgn(e.qty)}</td><td class="sub">${esc(e.by)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Brak wpisów.</div>`;
+}
+$("#v-pulpit").addEventListener("click",e=>{
+  const t=e.target.closest("[data-go]");if(t){if(t.dataset.low)$("#stLow").checked=true;go(t.dataset.go);return}
+  const r=e.target.closest("[data-inv]");if(r){fSel=r.dataset.inv;fStatus="all";setSeg("#fStatus","f",fStatus);go("fakt")}});
+const opText=e=>e.type==="W"?`PP ${esc(e.pp)}`:e.type==="P"?`Przyjęcie${e.doc?" · "+esc(e.doc):""}`:esc(e.doc||"Inwentaryzacja");
+
+/* ===== STANY ===== */
+const stSort={key:"name",dir:"asc"};let spis=false;const spisVal=new Map();let editMin=null;
+function stList(){const q=$("#stQ").value.trim().toLowerCase(),onlyLow=$("#stLow").checked;
+  return sortRows(items.filter(i=>(!q||i.name.toLowerCase().includes(q)||i.code.toLowerCase().includes(q))&&(!onlyLow||isLow(i))),stSort.key,stSort.dir,
+    (i,k)=>k==="stan"?stanOf(i.code):k==="min"?i.min:k==="brak"?(isLow(i)?i.min-stanOf(i.code):-1e9):k==="last"?(lastAt[i.code]||""):i[k])}
+function renderStany(){
+  const l=stList();$("#spisBar").hidden=!spis;$("#spisBtn").hidden=spis;
+  $("#stTbl").innerHTML=l.length?`<table><thead><tr>${th("Produkt","name",stSort)}${th("Kod","code",stSort)}${th("Stan","stan",stSort,"n")}${th("Min","min",stSort,"n")}${th("Do zamówienia","brak",stSort,"n")}${spis?'<th class="n">Policzono</th><th class="n">Różnica</th>':th("Ostatni ruch","last",stSort)}</tr></thead><tbody>${
+    l.map(i=>{const st=stanOf(i.code),v=spisVal.get(i.code)??"",diff=v===""?"":Number(v)-st;
+      return `<tr class="${isLow(i)?"low":""}"><td>${esc(i.name)}</td><td class="code">${esc(i.code)}</td><td class="n${st<0?" neg":""}"><b>${fmtQ(st)}</b></td>
+      <td class="n">${editMin===i.code?`<input class="cellin" data-minin="${esc(i.code)}" type="number" min="0" value="${i.min||""}">`:`<button class="cellbtn" data-min="${esc(i.code)}" title="Ustaw minimum">${i.min?fmtQ(i.min):"—"}</button>`}</td>
+      <td class="n">${isLow(i)?`<b>${fmtQ(i.min-st)}</b>`:""}</td>
+      ${spis?`<td class="n"><input class="cellin" data-spis="${esc(i.code)}" type="number" min="0" value="${esc(v)}"></td><td class="n ${diff<0?"neg":""}" data-diff="${esc(i.code)}">${diff===""?"":diff===0?"✓":sgn(diff)}</td>`:`<td class="sub">${esc(lastAt[i.code]||"—")}</td>`}</tr>`}).join("")}</tbody></table>`
+    :`<div class="empty">${items.length?"Nic nie pasuje.":"Brak produktów. Dodaj je w „Produkty i etykiety”."}</div>`;
+  spisInfo();
+  if(editMin){const el=$(`[data-minin="${CSS.escape(editMin)}"]`);if(el){el.focus();el.select()}}}
+onSort($("#stTbl"),stSort,renderStany);
+$("#stQ").oninput=renderStany;$("#stLow").onchange=renderStany;
+$("#stTbl").addEventListener("click",e=>{const b=e.target.closest("[data-min]");if(b){editMin=b.dataset.min;renderStany()}});
+$("#stTbl").addEventListener("keydown",async e=>{const m=e.target.closest("[data-minin]");
+  if(m){if(e.key==="Escape"){editMin=null;renderStany()}
+    if(e.key==="Enter"){const code=m.dataset.minin,v=Math.max(0,Math.round(Number(m.value)||0));m.disabled=true;
+      try{await post({action:"setMin",code,min:v});const it=itemByCode(code);if(it)it.min=v;toast("Minimum zapisane")}catch(er){toast("Nie zapisano: "+er.message,true)}
+      editMin=null;renderStany();render()}}
+  const s=e.target.closest("[data-spis]");
+  if(s&&e.key==="Enter"){const all=$$("[data-spis]"),i=all.indexOf(s);if(all[i+1]){all[i+1].focus();all[i+1].select()}}});
+$("#stTbl").addEventListener("focusout",e=>{if(e.target.closest("[data-minin]")&&editMin)setTimeout(()=>{if(editMin&&!document.activeElement.closest("[data-minin]")){editMin=null;renderStany()}},150)});
+$("#stTbl").addEventListener("input",e=>{const s=e.target.closest("[data-spis]");if(!s)return;const c=s.dataset.spis;
+  s.value===""?spisVal.delete(c):spisVal.set(c,s.value);
+  const d=$(`[data-diff="${CSS.escape(c)}"]`),diff=s.value===""?"":Number(s.value)-stanOf(c);
+  d.textContent=diff===""?"":diff===0?"✓":sgn(diff);d.className="n"+(diff<0?" neg":"");spisInfo()});
+function spisInfo(){const n=spisVal.size,ch=[...spisVal].filter(([c,v])=>Number(v)!==stanOf(c)).length;
+  $("#spisInfo").textContent=n?`Policzono ${n} produktów, ${ch} z różnicą`:"";$("#spisSave").disabled=!ch}
+$("#spisBtn").onclick=()=>{spis=true;renderStany();const f=$("[data-spis]");if(f)f.focus()};
+$("#spisCancel").onclick=()=>{if(spisVal.size&&!confirm("Porzucić wpisane ilości?"))return;spis=false;spisVal.clear();renderStany()};
+$("#spisSave").onclick=async()=>{
+  const todo=[...spisVal].filter(([c,v])=>Number(v)>=0&&Number(v)!==stanOf(c));if(!todo.length)return;
+  const b=$("#spisSave");b.disabled=true;let ok=0;const fails=[];
+  for(const[c,v]of todo){b.textContent=`Zapisuję ${ok+fails.length+1}/${todo.length}…`;const it=itemByCode(c);
+    try{await post({action:"inventory",code:c,name:it?it.name:c,by:me,counted:Number(v)});ok++;spisVal.delete(c)}catch(e){fails.push((it?it.name:c)+": "+e.message)}}
+  b.textContent="Zapisz spis";
+  if(fails.length)toast(`Zapisano ${ok}, błędy: ${fails.join("; ")}`,true);else{toast(`Spis zapisany: ${ok} korekt`);spis=false;spisVal.clear()}
+  await loadAll()};
+$("#stXlsx").onclick=()=>{const l=stList();if(!l.length)return toast("Brak produktów",true);
+  saveXlsx("stany","Stany",["Produkt","Kod","Stan","Min","Do zamówienia","Ostatni ruch"],
+    l.map(i=>{const st=stanOf(i.code);return[i.name,i.code,st,i.min||"",isLow(i)?i.min-st:"",lastAt[i.code]||""]}),[30,24,10,8,14,17])};
+$("#stPrint").onclick=()=>{const l=stList();
+  printDoc(`<div class="rep"><h1>Stany magazynu</h1><div class="meta">${esc(new Date().toLocaleString("pl-PL"))}${$("#stLow").checked?" · tylko do zamówienia":""}</div>
+    <table><thead><tr><th>Produkt</th><th>Kod</th><th>Stan</th><th>Min</th><th>Do zamówienia</th><th>Policzono</th></tr></thead><tbody>${
+    l.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.code)}</td><td style="text-align:right">${fmtQ(stanOf(i.code))}</td><td style="text-align:right">${i.min||""}</td><td style="text-align:right">${isLow(i)?fmtQ(i.min-stanOf(i.code)):""}</td><td style="width:25mm"></td></tr>`).join("")}</tbody></table></div>`,"A4")};
+
+/* ===== WYDANIE / PRZYJĘCIE ===== */
+let opMode="W",opRows=[{p:"",q:"",pp:""}];
+function setSeg(sel,attr,val){$$(sel+" button").forEach(b=>b.setAttribute("aria-pressed",b.dataset[attr]===val))}
+function renderOps(focusLast){
+  $("#opDoc").hidden=opMode!=="P";
+  const rec=opMode==="P";
+  $("#opHead").innerHTML=`<div class="oprow ophead${rec?" rec":""}"><span>Produkt</span><span>Ilość</span>${rec?"":"<span>PP</span>"}<span style="text-align:right">Na stanie</span><span></span></div>`;
+  $("#opRows").innerHTML=opRows.map((r,i)=>{const it=findItem(r.p);
+    return `<div class="oprow${rec?" rec":""}" data-i="${i}"><input list="prodList" data-f="p" value="${esc(r.p)}" placeholder="Nazwa albo kod produktu">
+      <input type="number" min="1" data-f="q" value="${esc(r.q)}" placeholder="szt.">${rec?"":`<input data-f="pp" value="${esc(r.pp)}" placeholder="numer PP">`}
+      <span class="st" data-st>${it?fmtQ(stanOf(it.code))+" szt.":""}</span><button class="x" data-rm title="Usuń wiersz">×</button></div>`}).join("");
+  opSum();
+  if(focusLast){const r=$$("#opRows .oprow");const f=r[r.length-1]&&r[r.length-1].querySelector("input");if(f)f.focus()}}
+function renderOpsAux(){$("#prodList").innerHTML=items.map(i=>`<option value="${esc(i.name)}">${esc(i.code)}</option>`).join("");
+  $$("#opRows .oprow").forEach(row=>{const it=findItem(opRows[row.dataset.i].p);row.querySelector("[data-st]").textContent=it?fmtQ(stanOf(it.code))+" szt.":""})}
+function opSum(){const n=opRows.filter(r=>findItem(r.p)&&Number(r.q)>0).length,t=opRows.reduce((a,r)=>a+(findItem(r.p)&&Number(r.q)>0?Number(r.q):0),0);
+  $("#opSum").textContent=n?`${n} poz., ${fmtQ(t)} szt.`:""}
+$("#opMode").onclick=e=>{const b=e.target.closest("[data-m]");if(!b)return;opMode=b.dataset.m;setSeg("#opMode","m",opMode);renderOps(true)};
+$("#opRows").addEventListener("input",e=>{const row=e.target.closest(".oprow"),f=e.target.dataset.f;if(!row||!f)return;
+  opRows[row.dataset.i][f]=e.target.value;e.target.classList.remove("bad");
+  if(f==="p"){const it=findItem(e.target.value);row.querySelector("[data-st]").textContent=it?fmtQ(stanOf(it.code))+" szt.":""}
+  opSum()});
+$("#opRows").addEventListener("change",e=>{if(e.target.dataset.f!=="p")return;const it=findItem(e.target.value);
+  if(it&&e.target.value!==it.name){e.target.value=it.name;opRows[e.target.closest(".oprow").dataset.i].p=it.name}});
+$("#opRows").addEventListener("click",e=>{if(!e.target.closest("[data-rm]"))return;const i=+e.target.closest(".oprow").dataset.i;
+  opRows.splice(i,1);if(!opRows.length)opRows.push({p:"",q:"",pp:""});renderOps()});
+$("#opRows").addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();
+  const ins=$$("#opRows input"),i=ins.indexOf(e.target);
+  if(i===ins.length-1){const last=opRows[opRows.length-1];opRows.push({p:"",q:"",pp:opMode==="W"?last.pp:""});renderOps(true)}
+  else ins[i+1].focus()});
+$("#opAdd").onclick=()=>{opRows.push({p:"",q:"",pp:""});renderOps(true)};
+$("#opSave").onclick=async()=>{
+  const rows=$$("#opRows .oprow");let bad=0;const good=[];
+  opRows.forEach((r,i)=>{const empty=!r.p.trim()&&!r.q&&!(r.pp||"").trim();if(empty)return;const el=rows[i];
+    const it=findItem(r.p),q=Number(r.q),pp=(r.pp||"").trim();
+    if(!it){el.querySelector('[data-f="p"]').classList.add("bad");bad++}
+    if(!(q>0)||q!==Math.round(q)){el.querySelector('[data-f="q"]').classList.add("bad");bad++}
+    if(opMode==="W"&&!pp){el.querySelector('[data-f="pp"]').classList.add("bad");bad++}
+    if(it&&q>0)good.push({it,q,pp})});
+  if(bad)return toast(opMode==="W"?"Popraw zaznaczone pola: produkt z listy, ilość i numer PP":"Popraw zaznaczone pola: produkt z listy i ilość",true);
+  if(!good.length)return toast("Dodaj co najmniej jeden produkt",true);
+  const b=$("#opSave");b.disabled=true;b.textContent="Zapisuję…";
+  try{
+    if(opMode==="W"){const by=new Map();good.forEach(g=>{if(!by.has(g.it.code))by.set(g.it.code,{it:g.it,lines:[]});by.get(g.it.code).lines.push({qty:g.q,pp:g.pp})});
+      for(const{it,lines}of by.values())await post({action:"addEntries",code:it.code,name:it.name,by:me,lines});
+      toast(`Wydano ${fmtQ(good.reduce((a,g)=>a+g.q,0))} szt.`)}
+    else{const doc=$("#opDocIn").value.trim();
+      if(doc){const m=new Map();good.forEach(g=>m.set(g.it.code,(m.get(g.it.code)||0)+g.q));
+        await post({action:"addInvoice",doc,by:me,lines:[...m].map(([code,qty])=>({code,qty}))});toast(`Faktura ${doc} zapisana`)}
+      else{for(const g of good)await post({action:"addReceipt",code:g.it.code,name:g.it.name,by:me,qty:g.q,doc:""});toast(`Przyjęto ${fmtQ(good.reduce((a,g)=>a+g.q,0))} szt.`)}
+      $("#opDocIn").value=""}
+    opRows=[{p:"",q:"",pp:""}];renderOps(true);await loadAll()}
+  catch(e){toast("Nie zapisano: "+e.message+" — sprawdź historię, zanim zapiszesz ponownie",true)}
+  finally{b.disabled=false;b.textContent="Zapisz"}};
+
+/* ===== HISTORIA ===== */
+const hSort={key:"at",dir:"desc"};let hLimit=300;
+function histList(){const f=$("#hFrom").value,t=$("#hTo").value,it=$("#hItem").value,ty=$("#hType").value,by=$("#hBy").value,
+  pp=$("#hPP").value.trim().toLowerCase(),q=$("#hQ").value.trim().toLowerCase();
+  const l=entries.filter(e=>{const d=e.at.slice(0,10);
+    return (!f||d>=f)&&(!t||d<=t)&&(!it||e.code===it)&&(!ty||e.type===ty)&&(!by||e.by===by)&&(!pp||String(e.pp).toLowerCase().includes(pp))
+      &&(!q||(e.name+" "+e.doc+" "+allocText(e)+" "+e.code).toLowerCase().includes(q))});
+  return hSort.key==="at"&&hSort.dir==="desc"?l:sortRows(l,hSort.key,hSort.dir,(e,k)=>k==="qty"?e.qty:e[k])}
+function fillSel(sel,first,opts){const s=$(sel),v=s.value;s.innerHTML=`<option value="">${first}</option>`+opts.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join("");s.value=v}
+function renderHist(){
+  fillSel("#hItem","Wszystkie produkty",items.map(i=>[i.code,i.name]));
+  fillSel("#hBy","Wszyscy",[...new Set(entries.map(e=>e.by).filter(Boolean))].sort().map(x=>[x,x]));
+  const l=histList(),w=l.filter(e=>e.type==="W").reduce((a,e)=>a+e.qty,0),p=l.filter(e=>e.type==="P").reduce((a,e)=>a+e.qty,0);
+  $("#hSum").textContent=`${fmtQ(l.length)} wpisów · wydano ${fmtQ(w)} szt. · przyjęto ${fmtQ(p)} szt.`;
+  const shown=l.slice(0,hLimit);
+  $("#hTbl").innerHTML=l.length?`<table><thead><tr>${th("Data","at",hSort)}${th("Operacja","type",hSort)}${th("Produkt","name",hSort)}${th("PP","pp",hSort)}${th("Ilość","qty",hSort,"n")}<th>Dokument / faktura</th>${th("Kto","by",hSort)}<th></th></tr></thead><tbody>${
+    shown.map(e=>`<tr><td class="sub" style="white-space:nowrap">${esc(e.at)}</td><td><span class="tag ${e.type}">${OPN[e.type]}</span></td><td>${esc(e.name)}</td><td>${e.type==="W"?esc(e.pp):""}</td>
+      <td class="n">${e.type==="W"?fmtQ(e.qty):sgn(e.qty)}</td><td>${esc(e.doc)}${e.type==="W"&&allocOf.has(e.id)?`<div class="sub">→ ${esc(allocText(e))}</div>`:""}</td><td class="sub">${esc(e.by)}</td>
+      <td class="n" data-cell="${esc(e.id)}"><button class="btn small danger" data-del="${esc(e.id)}">Usuń</button></td></tr>`).join("")}</tbody></table>${l.length>hLimit?`<button class="btn more" id="hMore">Pokaż wszystkie (${fmtQ(l.length)})</button>`:""}`
+    :`<div class="empty">${entries.length?"Nic nie pasuje do filtrów.":"Brak wpisów."}</div>`}
+onSort($("#hTbl"),hSort,renderHist);
+["#hFrom","#hTo","#hItem","#hType","#hBy"].forEach(s=>$(s).onchange=()=>{hLimit=300;renderHist()});
+["#hPP","#hQ"].forEach(s=>$(s).oninput=()=>{hLimit=300;renderHist()});
+$("#hClear").onclick=()=>{["#hFrom","#hTo","#hItem","#hType","#hBy","#hPP","#hQ"].forEach(s=>$(s).value="");renderHist()};
+$("#hTbl").addEventListener("click",async e=>{
+  if(e.target.id==="hMore"){hLimit=1e9;renderHist();return}
+  const d=e.target.closest("[data-del]");if(d){const c=d.parentElement;c.innerHTML=`<span class="confirm">Usunąć? <button class="btn small danger" data-yes="${esc(d.dataset.del)}">Tak</button><button class="btn small" data-no>Nie</button></span>`;return}
+  if(e.target.closest("[data-no]")){renderHist();return}
+  const y=e.target.closest("[data-yes]");if(y){y.disabled=true;y.textContent="…";
+    try{await post({action:"deleteEntry",id:y.dataset.yes});toast("Usunięto wpis");await loadAll()}catch(er){toast("Nie usunięto: "+er.message,true);renderHist()}}});
+$("#hXlsx").onclick=()=>{const l=histList();if(!l.length)return toast("Brak wpisów do pobrania",true);
+  saveXlsx("historia","Historia",["Data","Operacja","Produkt","Kod","PP","Ilość","Dokument","Faktura","Kto"],
+    l.map(e=>[e.at,OPN[e.type],e.name,e.code,e.pp,e.qty,e.doc,e.type==="W"?allocText(e):"",e.by]),[17,14,28,22,10,8,22,26,14])};
+
+/* ===== FAKTURY ===== */
+let fStatus="open",fSel=null;const fSort={key:"at",dir:"desc"};
+function fList(){const q=$("#fQ").value.trim().toLowerCase(),from=$("#fFrom").value,to=$("#fTo").value,byC=$("#fBy").value==="closed";
+  const l=invoices.filter(inv=>{
+    if(fStatus!=="all"&&(fStatus==="closed")!==inv.closed)return false;
+    const d=(byC?inv.closedAt:inv.at).slice(0,10);
+    if((from||to)&&(!d||(from&&d<from)||(to&&d>to)))return false;
+    return !q||inv.doc.toLowerCase().includes(q)||inv.lines.some(x=>x.name.toLowerCase().includes(q)||x.code.toLowerCase().includes(q)||x.allocs.some(a=>String(a.pp).toLowerCase().includes(q)))});
+  return sortRows(l,fSort.key,fSort.dir,(i,k)=>k==="left"?i.total-i.used:k==="total"?i.total:k==="status"?(i.closed?1:0):i[k]||"")}
+function renderFakt(){
+  const l=fList();
+  $("#fTbl").innerHTML=l.length?`<table><thead><tr>${th("Faktura","doc",fSort)}${th("Data","at",fSort)}<th class="n">Poz.</th>${th("Szt.","total",fSort,"n")}${th("Zostało","left",fSort,"n")}${th("Status","status",fSort)}${th("Zamknięta","closedAt",fSort)}</tr></thead><tbody>${
+    l.map(i=>`<tr data-inv="${esc(i.key)}" class="${i.key===fSel?"sel":""}" style="cursor:pointer"><td><b>${esc(i.doc)}</b></td><td class="sub">${esc(i.at.slice(0,10))}</td><td class="n">${i.lines.length}</td><td class="n">${fmtQ(i.total)}</td><td class="n">${i.closed?"—":`<b>${fmtQ(i.total-i.used)}</b>`}</td>
+      <td><span class="pill ${i.closed?"closed":"open"}">${i.closed?"Zamknięta":"Otwarta"}</span></td><td class="sub">${esc(i.closedAt.slice(0,10))}</td></tr>`).join("")}</tbody></table>`
+    :`<div class="empty">${invoices.length?(fStatus==="open"&&!$("#fQ").value&&!$("#fFrom").value&&!$("#fTo").value?"Wszystkie faktury są zamknięte 👍":"Nic nie pasuje do filtrów."):"Nie ma jeszcze faktur. Dodaj pierwszą przyciskiem „+ Nowa faktura”."}</div>`;
+  if(!l.some(i=>i.key===fSel))fSel=l[0]?l[0].key:null;
+  $$("#fTbl tr[data-inv]").forEach(r=>r.classList.toggle("sel",r.dataset.inv===fSel));
+  renderFDetail()}
+function renderFDetail(){const inv=invoices.find(i=>i.key===fSel),box=$("#fDetail");
+  if(!inv){box.innerHTML=`<div class="empty">Wybierz fakturę z listy.</div>`;return}
+  box.innerHTML=`<h3>${esc(inv.doc)}</h3><div class="note">Przyjęta ${esc(inv.at)} · <span class="pill ${inv.closed?"closed":"open"}">${inv.closed?"Zamknięta "+esc(inv.closedAt.slice(0,10)):"Otwarta — zostało "+fmtQ(inv.total-inv.used)+" szt."}</span></div>
+    ${inv.lines.map(x=>{const u=Math.min(x.used,x.qty),pc=x.qty?Math.round(u/x.qty*100):0;
+      return `<h4><span>${esc(x.name)}</span><span class="note">${fmtQ(u)} / ${fmtQ(x.qty)} szt.</span></h4><div class="prog"><i class="${u>=x.qty?"full":""}" style="width:${pc}%"></i></div>
+      ${x.allocs.length?`<table><thead><tr><th>PP</th><th class="n">Ilość</th><th>Data</th><th>Kto</th></tr></thead><tbody>${x.allocs.map(a=>`<tr><td><b>${esc(a.pp)}</b></td><td class="n">${fmtQ(a.qty)}</td><td class="sub">${esc(a.at)}</td><td class="sub">${esc(a.by)}</td></tr>`).join("")}</tbody></table>`:'<div class="note">Jeszcze nic nie wydano.</div>'}`}).join("")}`}
+onSort($("#fTbl"),fSort,renderFakt);
+$("#fTbl").addEventListener("click",e=>{const r=e.target.closest("tr[data-inv]");if(!r)return;fSel=r.dataset.inv;
+  $$("#fTbl tr[data-inv]").forEach(x=>x.classList.toggle("sel",x===r));renderFDetail()});
+$("#fStatus").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;fStatus=b.dataset.f;setSeg("#fStatus","f",fStatus);renderFakt()};
+["#fFrom","#fTo","#fBy"].forEach(s=>$(s).onchange=renderFakt);$("#fQ").oninput=renderFakt;
+$("#fNew").onclick=()=>{opMode="P";setSeg("#opMode","m","P");if(!opRows.some(r=>r.p||r.q))opRows=[{p:"",q:"",pp:""}];go("ops");renderOps();$("#opDocIn").focus()};
+function fPeriodText(){const f=$("#fFrom").value,t=$("#fTo").value;if(!f&&!t)return"";
+  return ($("#fBy").value==="closed"?"zamknięte ":"faktury z okresu ")+(f?"od "+f+" ":"")+(t?"do "+t:"")}
+$("#fXlsx").onclick=()=>{const l=fList();if(!l.length)return toast("Brak faktur na liście",true);
+  const rows=[];l.forEach(inv=>inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty);
+    const base=[inv.doc,inv.at.slice(0,10),inv.closed?"Zamknięta":"Otwarta",inv.closedAt.slice(0,10),x.name,x.code,x.qty,u,x.qty-u];
+    if(!x.allocs.length)rows.push([...base,"","","",""]);
+    else x.allocs.forEach(a=>rows.push([...base,a.pp,a.qty,a.at,a.by]))}));
+  saveXlsx("faktury-rozliczenie","Rozliczenie faktur",["Faktura","Data faktury","Status","Data zamknięcia","Produkt","Kod","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Data wydania","Kto"],
+    rows,[20,12,11,14,28,22,11,12,9,10,12,17,14])};
+$("#fPrint").onclick=()=>{const l=fList();if(!l.length)return toast("Brak faktur na liście",true);
+  printDoc(`<div class="rep"><h1>Rozliczenie faktur</h1><div class="meta">${esc({open:"Otwarte",closed:"Zamknięte",all:"Wszystkie"}[fStatus])}${fPeriodText()?" · "+esc(fPeriodText()):""} · wydruk ${esc(new Date().toLocaleString("pl-PL"))}</div>
+    ${l.map(inv=>`<div class="inv"><h2>${esc(inv.doc)} — ${inv.closed?"zamknięta "+esc(inv.closedAt.slice(0,10)):"otwarta, zostało "+fmtQ(inv.total-inv.used)+" szt."}</h2>
+      <div class="meta">Przyjęta ${esc(inv.at)}</div>
+      <table><thead><tr><th>Produkt</th><th>Na fakturze</th><th>Wydano</th><th>Rozdysponowanie na PP</th></tr></thead><tbody>${
+      inv.lines.map(x=>`<tr><td>${esc(x.name)}</td><td style="text-align:right">${fmtQ(x.qty)}</td><td style="text-align:right">${fmtQ(Math.min(x.used,x.qty))}</td><td>${x.allocs.map(a=>`PP ${esc(a.pp)}: ${fmtQ(a.qty)} (${esc(a.at.slice(0,10))})`).join(", ")||"—"}</td></tr>`).join("")}</tbody></table></div>`).join("")}</div>`,"A4")};
+
+/* ===== PRODUKTY I ETYKIETY ===== */
+const prSort={key:"name",dir:"asc"};const lblQty=new Map();let editName=null,lblPrevCode=null;
+const LS={len:ls.get("pc_lbl_len")||"30",font:ls.get("pc_lbl_font")||"auto",code:ls.get("pc_lbl_code")!=="0"};
+$("#lLen").value=LS.len;$("#lFont").value=LS.font;$("#lCode").checked=LS.code;
+function slugCode(n){const b="MAG-"+(n.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[łŁ]/g,"L").toUpperCase().replace(/[^A-Z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,24)||"PROD");
+  let c=b,i=2;while(items.some(x=>x.code===c))c=b+"-"+i++;return c}
+function prList(){const q=$("#prQ").value.trim().toLowerCase();
+  return sortRows(items.filter(i=>!q||i.name.toLowerCase().includes(q)||i.code.toLowerCase().includes(q)),prSort.key,prSort.dir,(i,k)=>k==="stan"?stanOf(i.code):i[k])}
+function renderProd(){const l=prList(),allOn=l.length&&l.every(i=>lblQty.has(i.code));
+  $("#prTbl").innerHTML=l.length?`<table><thead><tr><th><input type="checkbox" id="prAll" title="Zaznacz wszystkie widoczne"${allOn?" checked":""}></th><th class="n">Etykiet</th>${th("Produkt","name",prSort)}${th("Kod (zapisany w QR)","code",prSort)}${th("Stan","stan",prSort,"n")}<th></th></tr></thead><tbody>${
+    l.map(i=>{const n=lblQty.get(i.code);return `<tr><td><input type="checkbox" data-lbl="${esc(i.code)}"${n?" checked":""}></td>
+      <td class="n"><input class="qtyin" type="number" min="1" data-lq="${esc(i.code)}" value="${n||""}" placeholder="—"></td>
+      <td>${editName===i.code?`<span class="confirm"><input data-nmin="${esc(i.code)}" value="${esc(i.name)}" style="width:260px"><button class="btn small primary" data-nmok>Zapisz</button><button class="btn small" data-nmno>Anuluj</button></span>`:`${esc(i.name)}`}</td>
+      <td class="code">${esc(i.code)}</td><td class="n">${fmtQ(stanOf(i.code))}</td>
+      <td class="n" style="white-space:nowrap"><button class="btn small" data-prev="${esc(i.code)}">Podgląd</button> <button class="btn small" data-ren="${esc(i.code)}">Zmień nazwę</button> <span data-delcell><button class="btn small danger" data-pdel="${esc(i.code)}">Usuń</button></span></td></tr>`}).join("")}</tbody></table>`
+    :`<div class="empty">${items.length?"Nic nie pasuje.":"Brak produktów — dodaj pierwszy powyżej."}</div>`;
+  lblInfo();renderPreview();
+  if(editName){const el=$(`[data-nmin="${CSS.escape(editName)}"]`);if(el){el.focus();el.select()}}}
+onSort($("#prTbl"),prSort,renderProd);$("#prQ").oninput=renderProd;
+function lblInfo(){const n=[...lblQty.values()].reduce((a,x)=>a+x,0);
+  $("#lSel").textContent=n?`${lblQty.size} produktów, ${n} etykiet`:"Zaznacz produkty w tabeli poniżej.";
+  $("#lPrint").disabled=!n;$("#lPrint").textContent=n?`Drukuj etykiety (${n})`:"Drukuj etykiety"}
+$("#prTbl").addEventListener("change",e=>{
+  if(e.target.id==="prAll"){prList().forEach(i=>e.target.checked?lblQty.set(i.code,lblQty.get(i.code)||1):lblQty.delete(i.code));renderProd();return}
+  const c=e.target.dataset.lbl;if(c!==undefined){e.target.checked?lblQty.set(c,1):lblQty.delete(c);lblPrevCode=c;
+    const q=$(`[data-lq="${CSS.escape(c)}"]`);if(q)q.value=e.target.checked?1:"";lblInfo();renderPreview()}});
+$("#prTbl").addEventListener("input",e=>{const c=e.target.dataset.lq;if(c===undefined)return;const n=Math.max(0,Math.min(500,Math.round(Number(e.target.value)||0)));
+  n?lblQty.set(c,n):lblQty.delete(c);const cb=$(`[data-lbl="${CSS.escape(c)}"]`);if(cb)cb.checked=!!n;lblPrevCode=c;lblInfo();renderPreview()});
+$("#prTbl").addEventListener("click",async e=>{const t=e.target;
+  if(t.dataset.prev!==undefined){lblPrevCode=t.dataset.prev;renderPreview();return}
+  if(t.dataset.ren!==undefined){editName=t.dataset.ren;renderProd();return}
+  if(t.closest("[data-nmno]")){editName=null;renderProd();return}
+  if(t.closest("[data-nmok]")){await saveName();return}
+  if(t.dataset.pdel!==undefined){const it=itemByCode(t.dataset.pdel),st=stanOf(it.code);
+    t.parentElement.innerHTML=`<span class="confirm">${st?`<span class="note">na stanie ${fmtQ(st)} szt.!</span> `:""}Usunąć? <button class="btn small danger" data-pyes="${esc(it.code)}">Tak</button><button class="btn small" data-pno>Nie</button></span>`;return}
+  if(t.closest("[data-pno]")){renderProd();return}
+  const y=t.closest("[data-pyes]");if(y){y.disabled=true;
+    try{await post({action:"deleteItem",code:y.dataset.pyes});lblQty.delete(y.dataset.pyes);toast("Produkt usunięty (historia zostaje)");await loadAll()}catch(er){toast("Nie usunięto: "+er.message,true);renderProd()}}});
+$("#prTbl").addEventListener("keydown",e=>{if(!e.target.dataset.nmin)return;if(e.key==="Enter")saveName();if(e.key==="Escape"){editName=null;renderProd()}});
+async function saveName(){const el=$("[data-nmin]");if(!el)return;const code=el.dataset.nmin,name=el.value.trim(),it=itemByCode(code);
+  if(!name)return el.focus();if(it&&name===it.name){editName=null;renderProd();return}
+  el.disabled=true;try{await post({action:"renameItem",code,name});toast("Nazwa zmieniona");editName=null;await loadAll()}
+  catch(er){toast("Nie zmieniono: "+er.message,true);el.disabled=false;el.focus()}}
+$("#prAdd").onclick=async()=>{const name=$("#prName").value.trim(),own=$("#prCode").value.trim();if(!name)return $("#prName").focus();
+  if(own&&items.some(i=>i.code===own))return toast("Taki kod już jest: "+itemByCode(own).name,true);
+  const b=$("#prAdd");b.disabled=true;
+  try{const code=own||slugCode(name);await post({action:"addItem",code,name});toast("Dodano: "+name);$("#prName").value="";$("#prCode").value="";
+    await loadAll();lblQty.set(code,1);lblPrevCode=code;renderProd()}catch(er){toast("Nie dodano: "+er.message,true)}finally{b.disabled=false}};
+$("#prName").onkeydown=$("#prCode").onkeydown=e=>{if(e.key==="Enter")$("#prAdd").click()};
+["#lLen","#lFont"].forEach(s=>$(s).onchange=()=>{ls.set("pc_lbl_len",$("#lLen").value);ls.set("pc_lbl_font",$("#lFont").value);renderPreview()});
+$("#lCode").onchange=()=>{ls.set("pc_lbl_code",$("#lCode").checked?"1":"0");renderPreview()};
+
+/* QR jako wektor (SVG) — ostry przy każdym rozmiarze druku */
+function qrSvg(text,mm){const q=qrcode(0,"M");q.addData(text);q.make();const n=q.getModuleCount();let d="";
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(q.isDark(r,c))d+=`M${c} ${r}h1v1h-1z`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${n+2} ${n+2}" width="${mm}mm" height="${mm}mm" shape-rendering="crispEdges"><rect x="-1" y="-1" width="${n+2}" height="${n+2}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`}
+/* Etykieta: szerokość taśmy 50 mm (zadruk ok. 46 mm), długość do wyboru */
+function labelHtml(it){const len=Number($("#lLen").value),showCode=$("#lCode").checked,fs=$("#lFont").value;
+  const qr=Math.min(len-3,28),textW=50-4-1.5-qr;
+  const auto=it.name.length<=14?3.8:it.name.length<=28?3.1:it.name.length<=45?2.6:2.2;
+  const size=fs==="s"?2.4:fs==="m"?3.1:fs==="l"?4:auto,lines=Math.max(2,Math.floor((len-3-(showCode?3:0))/(size*1.15)));
+  return `<div class="lbl" style="height:${len}mm"><span>${qrSvg(it.code,qr)}</span><div class="t" style="max-width:${textW}mm">
+    <div class="nm" style="font-size:${size}mm;-webkit-line-clamp:${lines}">${esc(it.name)}</div>${showCode?`<div class="cd">${esc(it.code)}</div>`:""}</div></div>`}
+function renderPreview(){const it=itemByCode(lblPrevCode)||itemByCode([...lblQty.keys()][0])||items[0];
+  $("#lPrev").innerHTML=it?labelHtml(it):'<div class="note">Brak produktów</div>'}
+$("#lPrint").onclick=()=>{const len=Number($("#lLen").value);let html="";
+  for(const[c,n]of lblQty){const it=itemByCode(c);if(!it)continue;const one=labelHtml(it);for(let k=0;k<n;k++)html+=`<div class="lblpage">${one}</div>`}
+  printDoc(html,`50mm ${len}mm`)};
+
+/* ===== druk ===== */
+function printDoc(html,size){
+  $("#pageStyle").textContent=size==="A4"?"@page{size:A4;margin:12mm}":`@page{size:${size};margin:0}`;
+  $("#printArea").innerHTML=html;
+  setTimeout(()=>{window.print()},50)}
+window.addEventListener("afterprint",()=>{$("#printArea").innerHTML=""});
+
+/* ===== Eksport do Excela (.xlsx) — bez bibliotek, polskie znaki działają wszędzie ===== */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function zipStore(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;
+  const u16=n=>[n&255,(n>>>8)&255],u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+  for(const[name,text]of files){const nm=enc.encode(name),data=enc.encode(text),crc=crc32(data);
+    const loc=new Uint8Array([0x50,0x4b,3,4,...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(nm.length),...u16(0)]);
+    parts.push(loc,nm,data);
+    cd.push(new Uint8Array([0x50,0x4b,1,2,...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(nm.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),nm);
+    off+=loc.length+nm.length+data.length}
+  const cdLen=cd.reduce((a,x)=>a+x.length,0);
+  return new Blob([...parts,...cd,new Uint8Array([0x50,0x4b,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cdLen),...u32(off),0,0])],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})}
+const xmlEsc=s=>String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const colName=i=>{let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+function xlsxBlob(sheet,header,rows,widths){
+  const cell=(v,r,c,st)=>{const ref=colName(c)+r;if(v===null||v===undefined||v==="")return"";
+    return typeof v==="number"&&isFinite(v)?`<c r="${ref}"${st}><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`};
+  const all=[header,...rows],last=colName(header.length-1);
+  const data=all.map((row,i)=>`<row r="${i+1}">${row.map((v,c)=>cell(v,i+1,c,i?"":' s="1"')).join("")}</row>`).join("");
+  const cols=`<cols>${header.map((_,i)=>`<col min="${i+1}" max="${i+1}" width="${(widths&&widths[i])||14}" customWidth="1"/>`).join("")}</cols>`;
+  const ws=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${data}</sheetData><autoFilter ref="A1:${last}${all.length}"/></worksheet>`;
+  return zipStore([
+    ["[Content_Types].xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+    ["_rels/.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ["xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEsc(sheet).slice(0,31)}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${xmlEsc(sheet).slice(0,31)}'!$A$1:$${last}$${all.length}</definedName></definedNames></workbook>`],
+    ["xl/_rels/workbook.xml.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ["xl/styles.xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'],
+    ["xl/worksheets/sheet1.xml",ws]])}
+function saveXlsx(file,sheet,header,rows,widths){const a=document.createElement("a");a.href=URL.createObjectURL(xlsxBlob(sheet,header,rows,widths));
+  a.download=file+"-"+dayStr(new Date())+".xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+
+/* ===== nowa wersja ===== */
+async function checkUpdate(){try{const t=await (await fetch("./?v="+Date.now(),{cache:"no-store"})).text();
+  const m=t.match(/const PC_VER = "([^"]+)"/);if(m&&m[1]!==PC_VER&&!$("#upd")){const b=document.createElement("button");b.id="upd";b.className="upd";
+    b.textContent="Jest nowa wersja — Odśwież";b.onclick=()=>location.reload();document.body.append(b)}}catch{}}
+setInterval(checkUpdate,180000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate()});
+/* instalacja jako aplikacja na komputerze (Chrome / Edge) — ten sam service worker co telefon */
+if("serviceWorker" in navigator)navigator.serviceWorker.register("../sw.js",{scope:"../"}).catch(()=>{});
+
+/* start */
+renderOps();
+go(location.hash.slice(1)||"pulpit");
+window.addEventListener("hashchange",()=>{const v=location.hash.slice(1);if(v&&v!==view)go(v)});
+if(pin)loadAll();else askPin();
+</script>
+</body>
+</html>
