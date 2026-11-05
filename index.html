@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1b1e1c">
+<script>try{const t=localStorage.getItem("mqr_theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <title>Magazyn QR</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -15,7 +16,7 @@
 <script>
 /* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
    Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
-const APP_VER = "21";
+const APP_VER = "22";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -30,9 +31,11 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27O
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme:dark){:root{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;color-scheme:dark}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+:root[data-theme="light"]{color-scheme:light}
 html{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45}
 .wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));padding-block:0 40px}
@@ -199,7 +202,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
 <body>
 <header>
   <div class="wrap">
-    <div class="brand"><h1>Magazyn <span>QR</span></h1><button class="who" id="who"></button></div>
+    <div class="brand"><h1>Magazyn <span>QR</span></h1><div style="display:flex;gap:16px;align-items:baseline"><button class="who" id="themeBtn"></button><button class="who" id="who"></button></div></div>
     <nav>
       <button data-v="scan" aria-selected="true">Skanuj</button>
       <button data-v="stan" aria-selected="false">Stany<span class="dot" id="lowDot" hidden></span></button>
@@ -420,6 +423,15 @@ $("#who").onclick=()=>{const p=$("#namePanel");if(p){p.remove();return}
   $("main").prepend(d);$("#nmIn").focus();
   $("#nmOk").onclick=()=>{me=$("#nmIn").value.trim();ls.set("mqr_name",me);renderWho();d.remove()}};
 renderWho();
+const THEME_PREFIX="";
+/* motyw: automatyczny (jak system) / jasny / ciemny — zapamiętany w tym urządzeniu */
+const THEMES=[["auto","◐ Auto"],["light","☀ Jasny"],["dark","☾ Ciemny"]];
+let theme=(t=>t==="light"||t==="dark"?t:"auto")(ls.get("mqr_theme"));
+function applyTheme(){const r=document.documentElement;theme==="auto"?delete r.dataset.theme:r.dataset.theme=theme;
+  ls.set("mqr_theme",theme==="auto"?"":theme);$("#themeBtn").textContent=THEME_PREFIX+THEMES.find(x=>x[0]===theme)[1];
+  $("#themeBtn").title="Motyw: kliknij, żeby zmienić (automatyczny / jasny / ciemny)"}
+$("#themeBtn").onclick=()=>{const i=THEMES.findIndex(x=>x[0]===theme);theme=THEMES[(i+1)%3][0];applyTheme()};
+applyTheme();
 
 /* PIN */
 let pin=ls.get("mqr_pin")||"";

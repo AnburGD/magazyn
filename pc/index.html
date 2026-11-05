@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#1b1e1c">
+<script>try{const t=localStorage.getItem("mqr_theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <title>Magazyn QR — komputer</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="../icon-192.png">
@@ -13,7 +14,7 @@
 /* Wersja na komputer. Te same dane co w telefonie (ten sam Apps Script i ta sama tabela),
    ale osobna strona — wersja na telefon nie jest tu w ogóle zmieniana.
    Przy każdej zmianie podnieś PC_VER (komputer pokaże „Jest nowa wersja”). */
-const PC_VER = "2";
+const PC_VER = "3";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";
 </script>
 <style>
@@ -25,9 +26,11 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27O
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme:dark){:root{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--soft:#252926;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;--warn-bg:#3a3214;color-scheme:dark}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--soft:#252926;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;--warn-bg:#3a3214;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141615;--surface:#1e211f;--fg:#eceee9;--muted:#9aa29b;--line:#323732;--soft:#252926;--accent:#f5c22b;--accent-ink:#141615;--err:#f2877f;--ok:#5cbf7d;--warn-bg:#3a3214;color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+:root[data-theme="light"]{color-scheme:light}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45;display:flex}
 /* --- menu boczne --- */
@@ -84,10 +87,12 @@ tr.low td{background:var(--warn-bg)}
 .neg{color:var(--err);font-weight:600}
 .tag{display:inline-block;font-size:12px;font-weight:600;border-radius:3px;padding:1px 7px;background:var(--soft);white-space:nowrap}
 .tag.W{background:#e3ecf9;color:#1d4f91}.tag.P{background:#e1f3e3;color:#1f6b2a}.tag.K{background:#f3e6f7;color:#6b2a80}
-@media (prefers-color-scheme:dark){.tag.W{background:#1f3047;color:#9cc2f2}.tag.P{background:#1d3a22;color:#8fd49b}.tag.K{background:#3a2442;color:#d9a6ea}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.W{background:#1f3047;color:#9cc2f2}:root:not([data-theme="light"]) .tag.P{background:#1d3a22;color:#8fd49b}:root:not([data-theme="light"]) .tag.K{background:#3a2442;color:#d9a6ea}}
+:root[data-theme="dark"] .tag.W{background:#1f3047;color:#9cc2f2}:root[data-theme="dark"] .tag.P{background:#1d3a22;color:#8fd49b}:root[data-theme="dark"] .tag.K{background:#3a2442;color:#d9a6ea}
 .pill{font-size:12px;font-weight:600;border-radius:10px;padding:1px 9px;white-space:nowrap}
 .pill.open{background:var(--warn-bg);color:#7a5a00}.pill.closed{background:#e1f3e3;color:#1f6b2a}
-@media (prefers-color-scheme:dark){.pill.open{color:#f5c22b}.pill.closed{background:#1d3a22;color:#8fd49b}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill.open{color:#f5c22b}:root:not([data-theme="light"]) .pill.closed{background:#1d3a22;color:#8fd49b}}
+:root[data-theme="dark"] .pill.open{color:#f5c22b}:root[data-theme="dark"] .pill.closed{background:#1d3a22;color:#8fd49b}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 .cellbtn{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;border-bottom:1px dashed var(--muted)}
 .cellin{width:80px;padding:3px 6px;text-align:right}
@@ -174,6 +179,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
   </nav>
   <div class="sidefoot">
     <button id="who"></button>
+    <button id="themeBtn"></button>
     <button id="refresh">Odśwież dane</button>
     <span id="lastLoad" class="note" style="color:inherit;opacity:.7"></span>
     <button id="phoneQr">Wersja na telefon (kod QR)</button>
@@ -321,6 +327,15 @@ function badPin(){pin="";ls.set("mqr_pin","");askPin("Zły PIN. Wpisz go jeszcze
 function renderWho(){$("#who").textContent=me?"Ty: "+me:"Ustaw swoje imię"}
 $("#who").onclick=()=>{const v=prompt("Twoje imię (widoczne przy wpisach):",me);if(v===null)return;me=v.trim();ls.set("mqr_name",me);renderWho()};
 renderWho();
+const THEME_PREFIX="Motyw: ";
+/* motyw: automatyczny (jak system) / jasny / ciemny — zapamiętany w tym urządzeniu */
+const THEMES=[["auto","◐ Auto"],["light","☀ Jasny"],["dark","☾ Ciemny"]];
+let theme=(t=>t==="light"||t==="dark"?t:"auto")(ls.get("mqr_theme"));
+function applyTheme(){const r=document.documentElement;theme==="auto"?delete r.dataset.theme:r.dataset.theme=theme;
+  ls.set("mqr_theme",theme==="auto"?"":theme);$("#themeBtn").textContent=THEME_PREFIX+THEMES.find(x=>x[0]===theme)[1];
+  $("#themeBtn").title="Motyw: kliknij, żeby zmienić (automatyczny / jasny / ciemny)"}
+$("#themeBtn").onclick=()=>{const i=THEMES.findIndex(x=>x[0]===theme);theme=THEMES[(i+1)%3][0];applyTheme()};
+applyTheme();
 
 /* ===== API — wszystko POST-em, PIN w treści ===== */
 async function post(body){
