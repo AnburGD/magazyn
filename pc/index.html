@@ -14,7 +14,7 @@
 /* Wersja na komputer. Te same dane co w telefonie (ten sam Apps Script i ta sama tabela),
    ale osobna strona — wersja na telefon nie jest tu w ogóle zmieniana.
    Przy każdej zmianie podnieś PC_VER (komputer pokaże „Jest nowa wersja”). */
-const PC_VER = "3";
+const PC_VER = "4";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";
 </script>
 <style>
@@ -159,6 +159,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
   .rep th{background:#eee;font-weight:bold}
   .rep tbody tr:last-child td{border-bottom:.2mm solid #999}
   .rep .inv{break-inside:avoid}
+  .rep .inv+.inv{break-before:page;page-break-before:always}
   .rep .meta{font-size:9pt;color:#444}
   .lblpage{break-after:page;page-break-after:always;overflow:hidden}
   .lblpage:last-child{break-after:auto;page-break-after:auto}
@@ -254,8 +255,9 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
 <section id="v-fakt" hidden>
   <div class="top"><h1>Faktury</h1>
     <button class="btn" id="fNew">+ Nowa faktura</button>
-    <button class="btn" id="fPrint">Drukuj raport</button>
-    <button class="btn primary" id="fXlsx">Raport dla księgowości (Excel)</button></div>
+    <span class="note" id="fSelInfo"></span>
+    <button class="btn" id="fPrint" disabled>Drukuj zaznaczone</button>
+    <button class="btn primary" id="fXlsx" disabled>Raport dla księgowości (Excel)</button></div>
   <div class="bar">
     <div class="seg" id="fStatus"><button data-f="open" aria-pressed="true">Otwarte</button><button data-f="closed" aria-pressed="false">Zamknięte</button><button data-f="all" aria-pressed="false">Wszystkie</button></div>
     <select id="fBy"><option value="inv">okres wg daty faktury</option><option value="closed">okres wg daty zamknięcia</option></select>
@@ -263,7 +265,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
     <input id="fQ" class="grow" placeholder="Szukaj: faktura, produkt, PP…">
   </div>
   <div class="split"><div class="tbl" id="fTbl"></div><div class="panel detail" id="fDetail"></div></div>
-  <p class="note">Raport i wydruk obejmują faktury widoczne na liście (po filtrach). Do księgowości zwykle: „Zamknięte” + okres wg daty zamknięcia.</p>
+  <p class="note">Zaznacz faktury ☑ (kratka w nagłówku = wszystkie widoczne na liście). W Excelu każda faktura jest na osobnym arkuszu, a przy kilku fakturach jest też arkusz „Podsumowanie”. Na wydruku każda faktura zaczyna się od nowej strony. Do księgowości zwykle: „Zamknięte” + okres wg daty zamknięcia → kratka w nagłówku.</p>
 </section>
 
 <!-- PRODUKTY I ETYKIETY -->
@@ -592,7 +594,7 @@ $("#hXlsx").onclick=()=>{const l=histList();if(!l.length)return toast("Brak wpis
     l.map(e=>[e.at,OPN[e.type],e.name,e.code,e.pp,e.qty,e.doc,e.type==="W"?allocText(e):"",e.by]),[17,14,28,22,10,8,22,26,14])};
 
 /* ===== FAKTURY ===== */
-let fStatus="open",fSel=null;const fSort={key:"at",dir:"desc"};
+let fStatus="open",fSel=null;const fChecked=new Set();const fSort={key:"at",dir:"desc"};
 function fList(){const q=$("#fQ").value.trim().toLowerCase(),from=$("#fFrom").value,to=$("#fTo").value,byC=$("#fBy").value==="closed";
   const l=invoices.filter(inv=>{
     if(fStatus!=="all"&&(fStatus==="closed")!==inv.closed)return false;
@@ -602,10 +604,13 @@ function fList(){const q=$("#fQ").value.trim().toLowerCase(),from=$("#fFrom").va
   return sortRows(l,fSort.key,fSort.dir,(i,k)=>k==="left"?i.total-i.used:k==="total"?i.total:k==="status"?(i.closed?1:0):i[k]||"")}
 function renderFakt(){
   const l=fList();
-  $("#fTbl").innerHTML=l.length?`<table><thead><tr>${th("Faktura","doc",fSort)}${th("Data","at",fSort)}<th class="n">Poz.</th>${th("Szt.","total",fSort,"n")}${th("Zostało","left",fSort,"n")}${th("Status","status",fSort)}${th("Zamknięta","closedAt",fSort)}</tr></thead><tbody>${
-    l.map(i=>`<tr data-inv="${esc(i.key)}" class="${i.key===fSel?"sel":""}" style="cursor:pointer"><td><b>${esc(i.doc)}</b></td><td class="sub">${esc(i.at.slice(0,10))}</td><td class="n">${i.lines.length}</td><td class="n">${fmtQ(i.total)}</td><td class="n">${i.closed?"—":`<b>${fmtQ(i.total-i.used)}</b>`}</td>
+  for(const k of fChecked)if(!invoices.some(i=>i.key===k))fChecked.delete(k);
+  const allOn=l.length&&l.every(i=>fChecked.has(i.key)),someOn=l.some(i=>fChecked.has(i.key));
+  $("#fTbl").innerHTML=l.length?`<table><thead><tr><th style="width:34px"><input type="checkbox" id="fAll" title="Zaznacz wszystkie widoczne"${allOn?" checked":""}></th>${th("Faktura","doc",fSort)}${th("Data","at",fSort)}<th class="n">Poz.</th>${th("Szt.","total",fSort,"n")}${th("Zostało","left",fSort,"n")}${th("Status","status",fSort)}${th("Zamknięta","closedAt",fSort)}</tr></thead><tbody>${
+    l.map(i=>`<tr data-inv="${esc(i.key)}" class="${i.key===fSel?"sel":""}" style="cursor:pointer"><td><input type="checkbox" data-fchk="${esc(i.key)}"${fChecked.has(i.key)?" checked":""}></td><td><b>${esc(i.doc)}</b></td><td class="sub">${esc(i.at.slice(0,10))}</td><td class="n">${i.lines.length}</td><td class="n">${fmtQ(i.total)}</td><td class="n">${i.closed?"—":`<b>${fmtQ(i.total-i.used)}</b>`}</td>
       <td><span class="pill ${i.closed?"closed":"open"}">${i.closed?"Zamknięta":"Otwarta"}</span></td><td class="sub">${esc(i.closedAt.slice(0,10))}</td></tr>`).join("")}</tbody></table>`
     :`<div class="empty">${invoices.length?(fStatus==="open"&&!$("#fQ").value&&!$("#fFrom").value&&!$("#fTo").value?"Wszystkie faktury są zamknięte 👍":"Nic nie pasuje do filtrów."):"Nie ma jeszcze faktur. Dodaj pierwszą przyciskiem „+ Nowa faktura”."}</div>`;
+  if($("#fAll"))$("#fAll").indeterminate=someOn&&!allOn;fSelInfo();
   if(!l.some(i=>i.key===fSel))fSel=l[0]?l[0].key:null;
   $$("#fTbl tr[data-inv]").forEach(r=>r.classList.toggle("sel",r.dataset.inv===fSel));
   renderFDetail()}
@@ -616,22 +621,37 @@ function renderFDetail(){const inv=invoices.find(i=>i.key===fSel),box=$("#fDetai
       return `<h4><span>${esc(x.name)}</span><span class="note">${fmtQ(u)} / ${fmtQ(x.qty)} szt.</span></h4><div class="prog"><i class="${u>=x.qty?"full":""}" style="width:${pc}%"></i></div>
       ${x.allocs.length?`<table><thead><tr><th>PP</th><th class="n">Ilość</th><th>Data</th><th>Kto</th></tr></thead><tbody>${x.allocs.map(a=>`<tr><td><b>${esc(a.pp)}</b></td><td class="n">${fmtQ(a.qty)}</td><td class="sub">${esc(a.at)}</td><td class="sub">${esc(a.by)}</td></tr>`).join("")}</tbody></table>`:'<div class="note">Jeszcze nic nie wydano.</div>'}`}).join("")}`}
 onSort($("#fTbl"),fSort,renderFakt);
-$("#fTbl").addEventListener("click",e=>{const r=e.target.closest("tr[data-inv]");if(!r)return;fSel=r.dataset.inv;
+$("#fTbl").addEventListener("change",e=>{
+  if(e.target.id==="fAll"){fList().forEach(i=>e.target.checked?fChecked.add(i.key):fChecked.delete(i.key));renderFakt();return}
+  const k=e.target.dataset.fchk;if(k===undefined)return;e.target.checked?fChecked.add(k):fChecked.delete(k);
+  const l=fList(),all=l.every(i=>fChecked.has(i.key)),some=l.some(i=>fChecked.has(i.key));$("#fAll").checked=all;$("#fAll").indeterminate=some&&!all;fSelInfo()});
+function fSelInfo(){const n=fChecked.size,vis=new Set(fList().map(i=>i.key)),hid=[...fChecked].filter(k=>!vis.has(k)).length;
+  $("#fSelInfo").innerHTML=n?`Zaznaczono: <b>${n}</b>${hid?` (${hid} ukrytych przez filtr)`:""} · <button class="cellbtn" id="fClr">wyczyść</button>`:"";
+  $("#fXlsx").disabled=$("#fPrint").disabled=!n;
+  $("#fXlsx").textContent=n?`Raport dla księgowości — Excel (${n})`:"Raport dla księgowości (Excel)";$("#fPrint").textContent=n?`Drukuj zaznaczone (${n})`:"Drukuj zaznaczone"}
+$("#fSelInfo").addEventListener("click",e=>{if(e.target.id==="fClr"){fChecked.clear();renderFakt()}});
+const fPicked=()=>{const l=fList(),seen=new Set(l.map(i=>i.key));return[...l.filter(i=>fChecked.has(i.key)),...invoices.filter(i=>fChecked.has(i.key)&&!seen.has(i.key))]};
+$("#fTbl").addEventListener("click",e=>{if(e.target.matches("input[type=checkbox]")||e.target.closest("th"))return;const r=e.target.closest("tr[data-inv]");if(!r)return;fSel=r.dataset.inv;
   $$("#fTbl tr[data-inv]").forEach(x=>x.classList.toggle("sel",x===r));renderFDetail()});
 $("#fStatus").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;fStatus=b.dataset.f;setSeg("#fStatus","f",fStatus);renderFakt()};
 ["#fFrom","#fTo","#fBy"].forEach(s=>$(s).onchange=renderFakt);$("#fQ").oninput=renderFakt;
 $("#fNew").onclick=()=>{opMode="P";setSeg("#opMode","m","P");if(!opRows.some(r=>r.p||r.q))opRows=[{p:"",q:"",pp:""}];go("ops");renderOps();$("#opDocIn").focus()};
 function fPeriodText(){const f=$("#fFrom").value,t=$("#fTo").value;if(!f&&!t)return"";
   return ($("#fBy").value==="closed"?"zamknięte ":"faktury z okresu ")+(f?"od "+f+" ":"")+(t?"do "+t:"")}
-$("#fXlsx").onclick=()=>{const l=fList();if(!l.length)return toast("Brak faktur na liście",true);
-  const rows=[];l.forEach(inv=>inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty);
-    const base=[inv.doc,inv.at.slice(0,10),inv.closed?"Zamknięta":"Otwarta",inv.closedAt.slice(0,10),x.name,x.code,x.qty,u,x.qty-u];
-    if(!x.allocs.length)rows.push([...base,"","","",""]);
-    else x.allocs.forEach(a=>rows.push([...base,a.pp,a.qty,a.at,a.by]))}));
-  saveXlsx("faktury-rozliczenie","Rozliczenie faktur",["Faktura","Data faktury","Status","Data zamknięcia","Produkt","Kod","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Data wydania","Kto"],
-    rows,[20,12,11,14,28,22,11,12,9,10,12,17,14])};
-$("#fPrint").onclick=()=>{const l=fList();if(!l.length)return toast("Brak faktur na liście",true);
-  printDoc(`<div class="rep"><h1>Rozliczenie faktur</h1><div class="meta">${esc({open:"Otwarte",closed:"Zamknięte",all:"Wszystkie"}[fStatus])}${fPeriodText()?" · "+esc(fPeriodText()):""} · wydruk ${esc(new Date().toLocaleString("pl-PL"))}</div>
+$("#fXlsx").onclick=()=>{const l=fPicked();if(!l.length)return toast("Zaznacz faktury na liście",true);
+  const st=i=>i.closed?"Zamknięta":"Otwarta",ppList=i=>[...new Set(i.lines.flatMap(x=>x.allocs.map(a=>String(a.pp))))].join(", ");
+  const sheets=l.map(inv=>{const rows=[];inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty),base=[x.name,x.code,x.qty,u,x.qty-u];
+      if(!x.allocs.length)rows.push([...base,"","","",""]);else x.allocs.forEach((a,k)=>rows.push([...(k?["","","","",""]:base),a.pp,a.qty,a.at,a.by]))});
+    return{name:inv.doc,top:[["Faktura",inv.doc],["Data przyjęcia",inv.at],["Status",st(inv)+(inv.closed?" "+inv.closedAt.slice(0,10):"")],
+        ["Na fakturze",inv.total],["Wydano",inv.used],["Zostało",inv.total-inv.used],[]],
+      header:["Produkt","Kod","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Data wydania","Kto"],rows,widths:[30,22,12,13,9,12,13,17,14]}});
+  if(l.length>1)sheets.unshift({name:"Podsumowanie",top:[["Rozliczenie faktur",""],["Wydruk",new Date().toLocaleString("pl-PL")],[]],
+    header:["Faktura","Data przyjęcia","Status","Data zamknięcia","Pozycji","Na fakturze","Wydano","Zostało","Numery PP"],
+    rows:l.map(i=>[i.doc,i.at.slice(0,10),st(i),i.closedAt.slice(0,10),i.lines.length,i.total,i.used,i.total-i.used,ppList(i)]),widths:[22,14,11,15,9,12,9,9,40]});
+  const file=l.length===1?"faktura-"+l[0].doc.replace(/[^\p{L}\p{N}]+/gu,"_").replace(/^_|_$/g,""):"faktury-rozliczenie";
+  downloadBlob(xlsxBook(sheets),file+"-"+dayStr(new Date())+".xlsx")};
+$("#fPrint").onclick=()=>{const l=fPicked();if(!l.length)return toast("Zaznacz faktury na liście",true);
+  printDoc(`<div class="rep"><h1>Rozliczenie faktur</h1><div class="meta">${l.length} ${l.length===1?"faktura":l.length<5?"faktury":"faktur"} · wydruk ${esc(new Date().toLocaleString("pl-PL"))}</div>
     ${l.map(inv=>`<div class="inv"><h2>${esc(inv.doc)} — ${inv.closed?"zamknięta "+esc(inv.closedAt.slice(0,10)):"otwarta, zostało "+fmtQ(inv.total-inv.used)+" szt."}</h2>
       <div class="meta">Przyjęta ${esc(inv.at)}</div>
       <table><thead><tr><th>Produkt</th><th>Na fakturze</th><th>Wydano</th><th>Rozdysponowanie na PP</th></tr></thead><tbody>${
@@ -727,22 +747,30 @@ function zipStore(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;
   return new Blob([...parts,...cd,new Uint8Array([0x50,0x4b,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cdLen),...u32(off),0,0])],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})}
 const xmlEsc=s=>String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const colName=i=>{let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
-function xlsxBlob(sheet,header,rows,widths){
-  const cell=(v,r,c,st)=>{const ref=colName(c)+r;if(v===null||v===undefined||v==="")return"";
-    return typeof v==="number"&&isFinite(v)?`<c r="${ref}"${st}><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`};
-  const all=[header,...rows],last=colName(header.length-1);
-  const data=all.map((row,i)=>`<row r="${i+1}">${row.map((v,c)=>cell(v,i+1,c,i?"":' s="1"')).join("")}</row>`).join("");
-  const cols=`<cols>${header.map((_,i)=>`<col min="${i+1}" max="${i+1}" width="${(widths&&widths[i])||14}" customWidth="1"/>`).join("")}</cols>`;
-  const ws=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${data}</sheetData><autoFilter ref="A1:${last}${all.length}"/></worksheet>`;
+/* Skoroszyt z wieloma arkuszami. Arkusz: {name, top:[[etykieta,wartość],…], header, rows, widths}.
+   „top” to wiersze informacyjne nad tabelą (etykieta pogrubiona); nagłówek tabeli jest zamrożony i ma filtr. */
+function xlsxBook(sheets){
+  const used=new Set();
+  const names=sheets.map(sh=>{let b=String(sh.name).replace(/[\[\]:*?\/\\]/g,"-").replace(/^'+|'+$/g,"").trim().slice(0,31)||"Arkusz",n=b,i=2;
+    while(used.has(n.toLowerCase()))n=b.slice(0,31-String(i).length-3)+" ("+i+++")";used.add(n.toLowerCase());return n});
+  const cell=(v,ref,st)=>v===null||v===undefined||v===""?"":typeof v==="number"&&isFinite(v)?`<c r="${ref}"${st}><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+  const files=[],defs=[];
+  sheets.forEach((sh,si)=>{const top=sh.top||[],h=top.length+1,last=colName(sh.header.length-1),end=h+sh.rows.length;
+    const rowsX=[...top.map((r,i)=>`<row r="${i+1}">${r.map((v,c)=>cell(v,colName(c)+(i+1),c?"":' s="1"')).join("")}</row>`),
+      `<row r="${h}">${sh.header.map((v,c)=>cell(v,colName(c)+h,' s="1"')).join("")}</row>`,
+      ...sh.rows.map((r,i)=>`<row r="${h+i+1}">${r.map((v,c)=>cell(v,colName(c)+(h+i+1),"")).join("")}</row>`)].join("");
+    const cols=`<cols>${sh.header.map((_,i)=>`<col min="${i+1}" max="${i+1}" width="${(sh.widths&&sh.widths[i])||14}" customWidth="1"/>`).join("")}</cols>`;
+    files.push([`xl/worksheets/sheet${si+1}.xml`,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"${si?"":' tabSelected="1"'}><pane ySplit="${h}" topLeftCell="A${h+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${rowsX}</sheetData><autoFilter ref="A${h}:${last}${end}"/></worksheet>`]);
+    defs.push(`<definedName name="_xlnm._FilterDatabase" localSheetId="${si}" hidden="1">'${xmlEsc(names[si]).replace(/'/g,"''")}'!$A$${h}:$${last}$${end}</definedName>`)});
   return zipStore([
-    ["[Content_Types].xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+    ["[Content_Types].xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
     ["_rels/.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
-    ["xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEsc(sheet).slice(0,31)}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${xmlEsc(sheet).slice(0,31)}'!$A$1:$${last}$${all.length}</definedName></definedNames></workbook>`],
-    ["xl/_rels/workbook.xml.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ["xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${names.map((n,i)=>`<sheet name="${xmlEsc(n)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")}</sheets><definedNames>${defs.join("")}</definedNames></workbook>`],
+    ["xl/_rels/workbook.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
     ["xl/styles.xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'],
-    ["xl/worksheets/sheet1.xml",ws]])}
-function saveXlsx(file,sheet,header,rows,widths){const a=document.createElement("a");a.href=URL.createObjectURL(xlsxBlob(sheet,header,rows,widths));
-  a.download=file+"-"+dayStr(new Date())+".xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+    ...files])}
+function downloadBlob(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function saveXlsx(file,sheet,header,rows,widths){downloadBlob(xlsxBook([{name:sheet,header,rows,widths}]),file+"-"+dayStr(new Date())+".xlsx")}
 
 /* ===== nowa wersja ===== */
 async function checkUpdate(){try{const t=await (await fetch("./?v="+Date.now(),{cache:"no-store"})).text();
