@@ -13,7 +13,7 @@
 /* Wersja na komputer. Te same dane co w telefonie (ten sam Apps Script i ta sama tabela),
    ale osobna strona — wersja na telefon nie jest tu w ogóle zmieniana.
    Przy każdej zmianie podnieś PC_VER (komputer pokaże „Jest nowa wersja”). */
-const PC_VER = "1";
+const PC_VER = "2";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";
 </script>
 <style>
@@ -176,7 +176,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
     <button id="who"></button>
     <button id="refresh">Odśwież dane</button>
     <span id="lastLoad" class="note" style="color:inherit;opacity:.7"></span>
-    <a href="../">Wersja na telefon</a>
+    <button id="phoneQr">Wersja na telefon (kod QR)</button>
     <span style="opacity:.5">Wersja PC <script>document.write(PC_VER)</script></span>
   </div>
 </aside>
@@ -736,6 +736,17 @@ async function checkUpdate(){try{const t=await (await fetch("./?v="+Date.now(),{
 setInterval(checkUpdate,180000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate()});
 /* instalacja jako aplikacja na komputerze (Chrome / Edge) — ten sam service worker co telefon */
 if("serviceWorker" in navigator)navigator.serviceWorker.register("../sw.js",{scope:"../"}).catch(()=>{});
+
+/* kod QR do wersji na telefon — skanujesz aparatem i otwiera się w telefonie */
+$("#phoneQr").onclick=()=>{const url=new URL("../",location.href).href;
+  const d=document.createElement("div");d.className="modal";
+  d.innerHTML=`<div class="panel" style="align-items:center;text-align:center;width:min(380px,92vw)"><h2 style="margin:0">Wersja na telefon</h2>
+    <div class="note">Zeskanuj aparatem w telefonie — otworzy się aplikacja. Potem w przeglądarce „Dodaj do ekranu głównego”.</div>
+    <div style="background:#fff;padding:10px;border-radius:6px">${qrSvg(url,60)}</div>
+    <div class="code" style="font:500 12.5px var(--mono);word-break:break-all">${esc(url)}</div>
+    <div class="bar" style="margin:0"><a class="btn" href="../" style="text-decoration:none">Otwórz tutaj</a><button class="btn primary" data-close>Zamknij</button></div></div>`;
+  d.onclick=e=>{if(e.target===d||e.target.closest("[data-close]"))d.remove()};
+  d.tabIndex=-1;d.onkeydown=e=>{if(e.key==="Escape")d.remove()};document.body.append(d);d.focus()};
 
 /* start */
 renderOps();
