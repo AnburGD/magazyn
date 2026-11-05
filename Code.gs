@@ -1,7 +1,7 @@
 /**
  * Magazyn QR — backend w Google Sheets (Apps Script).
  * Arkusz "Produkty": Kod | Nazwa | Min
- * Arkusz "Wpisy":    Data | Produkt | Kod | Ilość | PP | Kto | ID | Typ | Dokument
+ * Arkusz "Wpisy":    Data | Produkt | Kod | Ilość | PP | Kto | ID | Typ | Dokument | Data faktury
  * Arkusz "Zestawy":  Zestaw | Kod | Ilość   (jeden wiersz = jeden produkt w zestawie)
  *
  * Typ: Wydanie (puste = Wydanie, starsze wpisy), Przyjęcie, Korekta (inwentaryzacja).
@@ -88,7 +88,8 @@ function readEntries(limitParam) {
   const out = all.slice(-limit).reverse().map(({ r, row }) => ({
     at: r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'yyyy-MM-dd HH:mm') : String(r[0]),
     name: String(r[1]), code: String(r[2]), qty: Number(r[3]), pp: String(r[4]), by: String(r[5]),
-    id: r[6] ? String(r[6]) : 'row-' + row, type: typeOf(r), doc: String(r[8] || '')
+    id: r[6] ? String(r[6]) : 'row-' + row, type: typeOf(r), doc: String(r[8] || ''),
+    invDate: r[9] instanceof Date ? Utilities.formatDate(r[9], tz, 'yyyy-MM-dd') : String(r[9] || '')
   }));
   return json({ ok: true, entries: out, stock: stockMap(sheet) });
 }
@@ -105,7 +106,7 @@ function setup() {
   let w = ss.getSheetByName('Wpisy');
   if (!w) {
     w = ss.insertSheet('Wpisy');
-    w.appendRow(['Data', 'Produkt', 'Kod', 'Ilość', 'PP', 'Kto', 'ID', 'Typ', 'Dokument']);
+    w.appendRow(['Data', 'Produkt', 'Kod', 'Ilość', 'PP', 'Kto', 'ID', 'Typ', 'Dokument', 'Data faktury']);
     w.setFrozenRows(1);
     w.getRange('A:A').setNumberFormat('yyyy-mm-dd hh:mm');
     w.getRange('E:E').setNumberFormat('@');
@@ -117,10 +118,11 @@ function setup() {
 function ensureColumns() {
   const ss = SpreadsheetApp.getActive();
   const w = ss.getSheetByName('Wpisy'), p = ss.getSheetByName('Produkty');
-  const head = w.getRange(1, 1, 1, 9).getValues()[0];
+  const head = w.getRange(1, 1, 1, 10).getValues()[0];
   if (!head[6]) w.getRange(1, 7).setValue('ID');
   if (!head[7]) w.getRange(1, 8).setValue('Typ');
   if (!head[8]) { w.getRange(1, 9).setValue('Dokument'); w.getRange('I:I').setNumberFormat('@'); }
+  if (!head[9]) { w.getRange(1, 10).setValue('Data faktury'); w.getRange('J:J').setNumberFormat('@'); }
   if (!p.getRange(1, 3).getValue()) p.getRange(1, 3).setValue('Min');
 }
 
@@ -132,7 +134,7 @@ function json(obj) {
 function rows(name) {
   const sh = SpreadsheetApp.getActive().getSheetByName(name);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, Math.max(sh.getLastColumn(), 9)).getValues();
+  return sh.getRange(2, 1, sh.getLastRow() - 1, Math.max(sh.getLastColumn(), 10)).getValues();
 }
 
 const TYPES = { 'Przyjęcie': 'P', 'Korekta': 'K' };  // reszta (też puste) = Wydanie 'W'
@@ -147,7 +149,16 @@ function stockMap(all) {
 
 function addRows(data) {
   const sh = SpreadsheetApp.getActive().getSheetByName('Wpisy');
-  sh.getRange(sh.getLastRow() + 1, 1, data.length, 9).setValues(data);
+  data = data.map(r => r.length < 10 ? r.concat(new Array(10 - r.length).fill('')) : r);
+  sh.getRange(sh.getLastRow() + 1, 1, data.length, 10).setValues(data);
+}
+
+// data wystawienia faktury: tylko poprawna data RRRR-MM-DD, inaczej puste
+function invDateOf(body) {
+  const d = String(body.invDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return '';
+  const t = new Date(d + 'T12:00:00Z');
+  return isNaN(t) || t.toISOString().slice(0, 10) !== d ? '' : d;
 }
 
 function newId() {
@@ -231,7 +242,7 @@ function doPost(e) {
       const now = new Date(), seen = {};
       const data = (body.lines || []).filter(l => {
         const c = String(l.code || ''); if (!names[c] || !(Number(l.qty) > 0) || seen[c]) return false; seen[c] = true; return true;
-      }).map(l => [now, names[String(l.code)], String(l.code), Math.round(Number(l.qty)), '', String(body.by || ''), newId(), 'Przyjęcie', doc]);
+      }).map(l => [now, names[String(l.code)], String(l.code), Math.round(Number(l.qty)), '', String(body.by || ''), newId(), 'Przyjęcie', doc, invDateOf(body)]);
       if (!data.length) return json({ ok: false, error: 'Dodaj do faktury co najmniej jeden produkt' });
       addRows(data);
       return json({ ok: true, saved: data.length });
@@ -275,7 +286,8 @@ function doPost(e) {
     if (body.action === 'addReceipt') {
       const qty = Number(body.qty);
       if (!(qty > 0)) return json({ ok: false, error: 'Wpisz ilość' });
-      addRows([[new Date(), String(body.name), String(body.code), qty, '', String(body.by || ''), newId(), 'Przyjęcie', String(body.doc || '').trim()]]);
+      const rdoc = String(body.doc || '').trim();
+      addRows([[new Date(), String(body.name), String(body.code), qty, '', String(body.by || ''), newId(), 'Przyjęcie', rdoc, rdoc ? invDateOf(body) : '']]);
       return json({ ok: true });
     }
     if (body.action === 'inventory') {

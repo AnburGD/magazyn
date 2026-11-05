@@ -16,7 +16,7 @@
 <script>
 /* Wersja aplikacji — przy każdej zmianie podnieś ją razem z CACHE w sw.js.
    Telefon porównuje ją z wersją na stronie i pokazuje „Jest nowa wersja”. */
-const APP_VER = "22";
+const APP_VER = "23";
 const JSQR_URL = "lib/jsQR.js";  // dekoder dla telefonów bez wbudowanego (iPhone)
 /* ====== USTAWIENIA — wklej tutaj swoje dane ====== */
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";  // adres aplikacji internetowej z Apps Script (kończy się na /exec)
@@ -141,6 +141,11 @@ td.ppc{font-family:var(--mono);white-space:nowrap}
 .prod.editing>.btn,.prod.editing>.del{display:none}
 .rename{display:flex;gap:6px;margin-top:2px}
 .rename input{flex:1;min-width:0}
+.invdate{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap}
+.invdate .label{flex-basis:100%}
+.invdate label.chk{display:flex;align-items:center;gap:8px;font-size:16px;cursor:pointer;min-height:44px}
+.invdate input[type=checkbox]{width:22px;height:22px;padding:0;accent-color:var(--accent);flex:none}
+.invdate input[type=date]{width:auto;flex:1;min-width:150px}
 .rename .btn{padding:8px 12px}
 .seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px}
 .seg button{flex:1;border:0;background:none;color:var(--muted);font:600 14px var(--body);padding:9px 4px;border-radius:4px;cursor:pointer}
@@ -272,6 +277,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
         <div class="line" style="grid-template-columns:88px 1fr"><span class="label">Ilość</span><span class="label">Nr faktury (opcjonalnie)</span>
           <div class="qty"><input id="rQty" type="number" inputmode="numeric" min="1" placeholder="0" aria-label="Ilość"></div>
           <input id="rDoc" placeholder="np. FV 123/2026" aria-label="Numer faktury"></div>
+        <div class="invdate" id="rBox" hidden style="margin-top:10px"><span class="label">Data wystawienia faktury</span><label class="chk"><input type="checkbox" id="rToday" checked> dzisiejsza data</label><input type="date" id="rDate" hidden aria-label="Data wystawienia faktury"></div>
       </div>
       <div id="mK" hidden>
         <div class="note" style="margin-bottom:8px">Policz, ile sztuk leży na półce, i wpisz wynik. Stan w aplikacji zostanie poprawiony.</div>
@@ -327,6 +333,7 @@ nav .dot{position:absolute;top:6px;right:calc(50% - 30px);width:8px;height:8px;b
       </div>
       <input id="invDoc" placeholder="Numer faktury, np. FV 123/2026" maxlength="60" autocomplete="off">
       <div class="note" id="invDocNote" hidden>Ta faktura już jest — produkty zostaną do niej dopisane.</div>
+      <div class="invdate" id="invBox"><span class="label">Data wystawienia faktury</span><label class="chk"><input type="checkbox" id="invToday" checked> dzisiejsza data</label><input type="date" id="invDate" hidden aria-label="Data wystawienia faktury"></div>
       <div class="setline"><span class="label">Produkt</span><span class="label">Ilość</span><span></span></div>
       <div class="lines" id="invLines"></div>
       <div class="pick" style="margin-top:0">
@@ -709,7 +716,7 @@ function openCode(code,src){code=code.trim();$("#scanMsg").hidden=true;closePick
   if(!it){$("#itemPanel").hidden=true;$("#newItem").hidden=false;$("#newCode").textContent=code;$("#newItem").dataset.code=code;$("#newName").value="";$("#newName").focus();return}
   $("#itemLbl").textContent=src==="list"?"Wybrano z listy":"Zeskanowano";
   $("#newItem").hidden=true;current=it;$("#itemName").textContent=it.name;$("#itemCode").textContent=it.code;
-  $("#lines").innerHTML="";addLine();$("#rQty").value="";$("#rDoc").value="";$("#kQty").value="";
+  $("#lines").innerHTML="";addLine();$("#rQty").value="";$("#rDoc").value="";resetInvDate("r");$("#rBox").hidden=true;$("#kQty").value="";
   setMode(mode);renderItemStats();$("#itemPanel").hidden=false;focusMode()}
 // tryb zostaje do końca sesji — przy przyjmowaniu dostawy nie trzeba przełączać przy każdym kodzie
 const SAVE_LBL={W:"Zapisz wydanie",P:"Zapisz przyjęcie",K:"Zapisz stan"};
@@ -745,7 +752,8 @@ $("#saveEntries").onclick=async()=>{if(!current)return;
     if(raw.some(x=>!(x.qty>0)||!x.pp))return toast("Każdy wiersz potrzebuje ilości i numeru PP",true);
     body={action:"addEntries",lines:raw};done=()=>`Wydano ${fmtQ(raw.reduce((a,x)=>a+x.qty,0))} szt. ${current.name}`}
   else if(mode==="P"){const q=Number($("#rQty").value);if(!(q>0))return toast("Wpisz przyjętą ilość",true);
-    body={action:"addReceipt",qty:q,doc:$("#rDoc").value.trim()};done=()=>`Przyjęto ${fmtQ(q)} szt. ${current.name}`}
+    const rdoc=$("#rDoc").value.trim(),invDate=rdoc?invDateOrErr("r"):"";if(invDate===null)return;
+    body={action:"addReceipt",qty:q,doc:rdoc,invDate};done=()=>`Przyjęto ${fmtQ(q)} szt. ${current.name}`}
   else{const v=$("#kQty").value;if(v===""||!(Number(v)>=0))return toast("Wpisz policzoną ilość",true);
     body={action:"inventory",counted:Number(v)};done=r=>r.diff?`Stan poprawiony: ${sgn(r.diff)} szt.`:"Stan się zgadza ✓"}
   if(!me){toast("Najpierw ustaw swoje imię (u góry)",true);$("#who").click();return}
@@ -875,7 +883,8 @@ function computeInvoices(){
   const byKey=new Map();invoices=[];allocOf=new Map();openQ=new Map();
   for(let i=entries.length-1;i>=0;i--){const e=entries[i];   // od najstarszego
     if(e.type==="P"&&e.doc){const k=invKey(e.doc);let inv=byKey.get(k);
-      if(!inv){inv={key:k,doc:e.doc.trim().replace(/\s+/g," "),at:e.at,lines:[]};byKey.set(k,inv);invoices.push(inv)}
+      if(!inv){inv={key:k,doc:e.doc.trim().replace(/\s+/g," "),at:e.at,date:"",lines:[]};byKey.set(k,inv);invoices.push(inv)}
+      if(!inv.date&&e.invDate)inv.date=e.invDate;
       let line=inv.lines.find(l=>l.code===e.code);
       if(!line){line={code:e.code,name:e.name,qty:0,used:0,allocs:[]};inv.lines.push(line);
         if(!openQ.has(e.code))openQ.set(e.code,[]);openQ.get(e.code).push({inv,line})}
@@ -898,7 +907,7 @@ function renderInvoices(){const box=$("#invList");if(!box)return;
   box.innerHTML=l.map(inv=>{const left=inv.total-inv.used;
     return `<details class="inv" data-inv="${esc(inv.key)}"${invOpenSet.has(inv.key)?" open":""}><summary>
       <div class="ihead"><span class="idoc">${esc(inv.doc)}</span><span class="pill ${inv.closed?"closed":"open"}">${inv.closed?"Zamknięta":"Otwarta"}</span></div>
-      <div class="sub">${esc(inv.at)} · ${inv.closed?`rozliczono ${fmtQ(inv.total)} szt.`:`zostało ${fmtQ(left)} z ${fmtQ(inv.total)} szt.`}</div>
+      <div class="sub">${inv.date?`wystawiona ${esc(inv.date)} · `:""}przyjęta ${esc(inv.at)} · ${inv.closed?`rozliczono ${fmtQ(inv.total)} szt.`:`zostało ${fmtQ(left)} z ${fmtQ(inv.total)} szt.`}</div>
       <div class="ilines">${inv.lines.map(x=>{const u=Math.min(x.used,x.qty),pc=x.qty?Math.round(u/x.qty*100):0;
         return `<div class="il"><span>${esc(x.name)}</span><span class="q">${fmtQ(u)} / ${fmtQ(x.qty)}</span><div class="bar"><i class="${u>=x.qty?"full":""}" style="width:${pc}%"></i></div></div>`}).join("")}</div>
       <span class="more">Pokaż, na jakie PP poszło ›</span></summary>
@@ -909,12 +918,23 @@ $("#invFilter").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;in
 $("#invSearch").oninput=renderInvoices;
 $("#invCsv").onclick=()=>{if(!invoices.length)return toast("Brak faktur",true);
   const rows=[];invoices.forEach(inv=>inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty);
-    rows.push([inv.doc,inv.at,x.name,x.code,x.qty,u,x.qty-u,inv.closed?"Zamknięta":"Otwarta",x.allocs.map(a=>`PP ${a.pp}: ${a.qty}`).join(", ")])}));
-  saveXlsx("faktury","Faktury",["Faktura","Data","Produkt","Kod","Na fakturze","Wydano","Zostało","Status","Wydania"],rows,[18,17,26,20,12,10,10,12,40])};
+    rows.push([inv.doc,inv.date,inv.at,x.name,x.code,x.qty,u,x.qty-u,inv.closed?"Zamknięta":"Otwarta",x.allocs.map(a=>`PP ${a.pp}: ${a.qty}`).join(", ")])}));
+  saveXlsx("faktury","Faktury",["Faktura","Data wystawienia","Data przyjęcia","Produkt","Kod","Na fakturze","Wydano","Zostało","Status","Wydania"],rows,[18,15,17,26,20,12,10,10,12,40])};
+
+/* --- data wystawienia faktury: „dzisiejsza data” albo wybrana z kalendarza --- */
+function resetInvDate(p){$("#"+p+"Today").checked=true;const d=$("#"+p+"Date");d.hidden=true;d.value="";d.max=dayStr(new Date())}
+function bindInvDate(p){$("#"+p+"Today").onchange=()=>{const d=$("#"+p+"Date"),on=$("#"+p+"Today").checked;d.hidden=on;d.max=dayStr(new Date());
+  if(!on){if(!d.value)d.value=dayStr(new Date());d.focus()}}}
+/* zwraca datę albo null (i pokazuje komunikat), gdy data jest zła */
+function invDateOrErr(p){const today=dayStr(new Date());if($("#"+p+"Today").checked)return today;const v=$("#"+p+"Date").value;
+  if(!v){toast("Wybierz datę wystawienia faktury",true);$("#"+p+"Date").focus();return null}
+  if(v>today){toast("Data wystawienia nie może być z przyszłości",true);$("#"+p+"Date").focus();return null}return v}
+bindInvDate("inv");bindInvDate("r");
+$("#rDoc").addEventListener("input",()=>{$("#rBox").hidden=!$("#rDoc").value.trim()});
 
 /* --- nowa faktura (kilka produktów naraz) --- */
 let invEd=null;
-function openInvEditor(){invEd={lines:[]};$("#invDoc").value="";$("#invDocNote").hidden=true;$("#invQ").value="";$("#invPick").hidden=true;
+function openInvEditor(){invEd={lines:[]};$("#invDoc").value="";resetInvDate("inv");$("#invDocNote").hidden=true;$("#invQ").value="";$("#invPick").hidden=true;
   renderInvLines();$("#invEditor").hidden=false;$("#invNew").hidden=true;$("#invDoc").focus()}
 function closeInvEditor(){invEd=null;$("#invEditor").hidden=true;$("#invNew").hidden=false}
 function renderInvLines(){$("#invLines").innerHTML=invEd.lines.length?invEd.lines.map((l,i)=>`<div class="setline"><span class="nm">${esc(itemBy(l.code).name)}</span>
@@ -940,9 +960,10 @@ $("#invLines").addEventListener("click",e=>{const b=e.target.closest("[data-ix]"
 $("#invSave").onclick=async()=>{if(!invEd)return;const doc=$("#invDoc").value.trim();
   if(!doc){$("#invDoc").focus();return toast("Wpisz numer faktury",true)}
   const lines=invEd.lines.filter(l=>l.qty>0);if(!lines.length)return toast("Dodaj co najmniej jeden produkt z ilością",true);
+  const invDate=invDateOrErr("inv");if(!invDate)return;
   if(!me){toast("Najpierw ustaw swoje imię (u góry)",true);$("#who").click();return}
   const b=$("#invSave");b.disabled=true;b.textContent="Zapisuję…";
-  try{const r=await post({action:"addInvoice",doc,by:me,lines});toast(`Zapisano fakturę ${doc}: ${r.saved} ${plProd(r.saved)}`);
+  try{const r=await post({action:"addInvoice",doc,by:me,lines,invDate});toast(`Zapisano fakturę ${doc}: ${r.saved} ${plProd(r.saved)}`);
     invOpenSet.add(invKey(doc));closeInvEditor();invFilter="open";$("#invFilter").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.f==="open"));await loadEntries()}
   catch(err){toast("Nie zapisano: "+err.message,true)}finally{b.disabled=false;b.textContent="Zapisz fakturę"}};
 

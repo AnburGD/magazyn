@@ -14,7 +14,7 @@
 /* Wersja na komputer. Te same dane co w telefonie (ten sam Apps Script i ta sama tabela),
    ale osobna strona — wersja na telefon nie jest tu w ogóle zmieniana.
    Przy każdej zmianie podnieś PC_VER (komputer pokaże „Jest nowa wersja”). */
-const PC_VER = "5";
+const PC_VER = "6";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";
 </script>
 <style>
@@ -227,7 +227,10 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
     <div class="bar"><div class="seg" id="opMode"><button data-m="W" aria-pressed="true">Wydanie na PP</button><button data-m="P" aria-pressed="false">Przyjęcie / faktura</button></div></div>
     <div class="panel">
       <div id="opDoc" hidden style="margin-bottom:14px"><div class="label" style="margin-bottom:4px">Numer faktury / dokumentu</div>
-        <input id="opDocIn" style="width:320px" placeholder="np. FV 123/2026 (puste = bez faktury)">
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><input id="opDocIn" style="width:320px" placeholder="np. FV 123/2026 (puste = bez faktury)">
+        <span id="opDateBox" hidden style="display:flex;gap:10px;align-items:center"><span class="label">Data wystawienia</span>
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="opToday" checked> dzisiejsza data</label>
+          <input type="date" id="opDate" hidden></span></div>
         <div class="note" style="margin-top:4px">Z numerem faktury wydania będą z niej schodzić automatycznie (najstarsza faktura najpierw).</div></div>
       <div id="opHead"></div>
       <div id="opRows"></div>
@@ -265,7 +268,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
     <label title="Raport dla księgowości zapisuje się jako PDF (taki sam jak wydruk) zamiast Excela"><input type="checkbox" id="fPdf"> PDF (wersja do druku)</label></div>
   <div class="bar">
     <div class="seg" id="fStatus"><button data-f="open" aria-pressed="true">Otwarte</button><button data-f="closed" aria-pressed="false">Zamknięte</button><button data-f="all" aria-pressed="false">Wszystkie</button></div>
-    <select id="fBy"><option value="inv">okres wg daty faktury</option><option value="closed">okres wg daty zamknięcia</option></select>
+    <select id="fBy"><option value="inv">okres wg daty wystawienia</option><option value="closed">okres wg daty zamknięcia</option></select>
     <label class="note">od <input type="date" id="fFrom"></label><label class="note">do <input type="date" id="fTo"></label>
     <input id="fQ" class="grow" placeholder="Szukaj: faktura, produkt, PP…">
   </div>
@@ -391,7 +394,8 @@ function computeInvoices(){
   const byKey=new Map(),openQ=new Map();invoices=[];allocOf=new Map();
   for(let i=entries.length-1;i>=0;i--){const e=entries[i];
     if(e.type==="P"&&e.doc){const k=invKey(e.doc);let inv=byKey.get(k);
-      if(!inv){inv={key:k,doc:e.doc.trim().replace(/\s+/g," "),at:e.at,lines:[]};byKey.set(k,inv);invoices.push(inv)}
+      if(!inv){inv={key:k,doc:e.doc.trim().replace(/\s+/g," "),at:e.at,date:"",lines:[]};byKey.set(k,inv);invoices.push(inv)}
+      if(!inv.date&&e.invDate)inv.date=e.invDate;
       let line=inv.lines.find(l=>l.code===e.code);
       if(!line){line={code:e.code,name:e.name,qty:0,used:0,allocs:[]};inv.lines.push(line);
         if(!openQ.has(e.code))openQ.set(e.code,[]);openQ.get(e.code).push({inv,line})}
@@ -402,6 +406,7 @@ function computeInvoices(){
       if(out.length)allocOf.set(e.id,{list:out,free:left})}}
   invoices.forEach(inv=>{inv.total=inv.lines.reduce((a,l)=>a+l.qty,0);inv.used=inv.lines.reduce((a,l)=>a+Math.min(l.used,l.qty),0);
     inv.closed=inv.used>=inv.total;
+    inv.dayIss=inv.date||inv.at.slice(0,10);
     inv.closedAt=inv.closed?inv.lines.flatMap(l=>l.allocs.map(a=>a.at)).sort().pop()||inv.at:""});
   invoices.reverse()}
 const allocText=e=>{const a=allocOf.get(e.id);if(!a)return"";
@@ -445,7 +450,7 @@ function renderPulpit(){
     low.sort((a,b)=>(stanOf(a.code)-a.min)-(stanOf(b.code)-b.min)).map(i=>`<tr><td>${esc(i.name)}</td><td class="n${stanOf(i.code)<0?" neg":""}">${fmtQ(stanOf(i.code))}</td><td class="n">${fmtQ(i.min)}</td><td class="n"><b>${fmtQ(i.min-stanOf(i.code))}</b></td></tr>`).join("")}</tbody></table>`
     :`<div class="empty">${items.some(i=>i.min>0)?"Wszystkiego wystarczy 👍":"Ustaw minimum przy produktach w „Stany”, a tu pojawi się lista do zamówienia."}</div>`;
   $("#pInv").innerHTML=open.length?`<table><thead><tr><th>Faktura</th><th>Data</th><th class="n">Wydano</th><th class="n">Zostało</th></tr></thead><tbody>${
-    open.map(i=>`<tr data-inv="${esc(i.key)}" style="cursor:pointer"><td>${esc(i.doc)}</td><td class="sub">${esc(i.at.slice(0,10))}</td><td class="n">${fmtQ(i.used)} / ${fmtQ(i.total)}</td><td class="n"><b>${fmtQ(i.total-i.used)}</b></td></tr>`).join("")}</tbody></table>`
+    open.map(i=>`<tr data-inv="${esc(i.key)}" style="cursor:pointer"><td>${esc(i.doc)}</td><td class="sub">${esc(i.dayIss)}</td><td class="n">${fmtQ(i.used)} / ${fmtQ(i.total)}</td><td class="n"><b>${fmtQ(i.total-i.used)}</b></td></tr>`).join("")}</tbody></table>`
     :`<div class="empty">${invoices.length?"Wszystkie faktury rozliczone 👍":"Brak faktur."}</div>`;
   const d30=daysAgo(29),top={};entries.forEach(e=>{if(e.type==="W"&&e.at.slice(0,10)>=d30)top[e.code]=(top[e.code]||0)+e.qty});
   const tl=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,10);
@@ -555,14 +560,23 @@ $("#opSave").onclick=async()=>{
     if(opMode==="W"){const by=new Map();good.forEach(g=>{if(!by.has(g.it.code))by.set(g.it.code,{it:g.it,lines:[]});by.get(g.it.code).lines.push({qty:g.q,pp:g.pp})});
       for(const{it,lines}of by.values())await post({action:"addEntries",code:it.code,name:it.name,by:me,lines});
       toast(`Wydano ${fmtQ(good.reduce((a,g)=>a+g.q,0))} szt.`)}
-    else{const doc=$("#opDocIn").value.trim();
+    else{const doc=$("#opDocIn").value.trim(),invDate=doc?opInvDate():"";if(invDate===null)return;
       if(doc){const m=new Map();good.forEach(g=>m.set(g.it.code,(m.get(g.it.code)||0)+g.q));
-        await post({action:"addInvoice",doc,by:me,lines:[...m].map(([code,qty])=>({code,qty}))});toast(`Faktura ${doc} zapisana`)}
+        await post({action:"addInvoice",doc,by:me,invDate,lines:[...m].map(([code,qty])=>({code,qty}))});toast(`Faktura ${doc} zapisana`)}
       else{for(const g of good)await post({action:"addReceipt",code:g.it.code,name:g.it.name,by:me,qty:g.q,doc:""});toast(`Przyjęto ${fmtQ(good.reduce((a,g)=>a+g.q,0))} szt.`)}
-      $("#opDocIn").value=""}
+      $("#opDocIn").value="";resetOpDate()}
     opRows=[{p:"",q:"",pp:""}];renderOps(true);await loadAll()}
   catch(e){toast("Nie zapisano: "+e.message+" — sprawdź historię, zanim zapiszesz ponownie",true)}
   finally{b.disabled=false;b.textContent="Zapisz"}};
+
+/* data wystawienia faktury: „dzisiejsza data” albo wybrana z kalendarza */
+function resetOpDate(){$("#opToday").checked=true;$("#opDate").hidden=true;$("#opDate").value="";$("#opDate").max=dayStr(new Date());$("#opDateBox").hidden=!$("#opDocIn").value.trim()}
+$("#opDocIn").addEventListener("input",()=>{$("#opDateBox").hidden=!$("#opDocIn").value.trim()});
+$("#opToday").onchange=()=>{const d=$("#opDate"),on=$("#opToday").checked;d.hidden=on;d.max=dayStr(new Date());if(!on){if(!d.value)d.value=dayStr(new Date());d.focus()}};
+function opInvDate(){const today=dayStr(new Date());if($("#opToday").checked)return today;const v=$("#opDate").value;
+  if(!v){toast("Wybierz datę wystawienia faktury",true);$("#opDate").focus();return null}
+  if(v>today){toast("Data wystawienia nie może być z przyszłości",true);$("#opDate").focus();return null}return v}
+resetOpDate();
 
 /* ===== HISTORIA ===== */
 const hSort={key:"at",dir:"desc"};let hLimit=300;
@@ -599,11 +613,11 @@ $("#hXlsx").onclick=()=>{const l=histList();if(!l.length)return toast("Brak wpis
     l.map(e=>[e.at,OPN[e.type],e.name,e.code,e.pp,e.qty,e.doc,e.type==="W"?allocText(e):"",e.by]),[17,14,28,22,10,8,22,26,14])};
 
 /* ===== FAKTURY ===== */
-let fStatus="open",fSel=null;const fChecked=new Set();const fSort={key:"at",dir:"desc"};
+let fStatus="open",fSel=null;const fChecked=new Set();const fSort={key:"dayIss",dir:"desc"};
 function fList(){const q=$("#fQ").value.trim().toLowerCase(),from=$("#fFrom").value,to=$("#fTo").value,byC=$("#fBy").value==="closed";
   const l=invoices.filter(inv=>{
     if(fStatus!=="all"&&(fStatus==="closed")!==inv.closed)return false;
-    const d=(byC?inv.closedAt:inv.at).slice(0,10);
+    const d=byC?inv.closedAt.slice(0,10):inv.dayIss;
     if((from||to)&&(!d||(from&&d<from)||(to&&d>to)))return false;
     return !q||inv.doc.toLowerCase().includes(q)||inv.lines.some(x=>x.name.toLowerCase().includes(q)||x.code.toLowerCase().includes(q)||x.allocs.some(a=>String(a.pp).toLowerCase().includes(q)))});
   return sortRows(l,fSort.key,fSort.dir,(i,k)=>k==="left"?i.total-i.used:k==="total"?i.total:k==="status"?(i.closed?1:0):i[k]||"")}
@@ -611,8 +625,8 @@ function renderFakt(){
   const l=fList();
   for(const k of fChecked)if(!invoices.some(i=>i.key===k))fChecked.delete(k);
   const allOn=l.length&&l.every(i=>fChecked.has(i.key)),someOn=l.some(i=>fChecked.has(i.key));
-  $("#fTbl").innerHTML=l.length?`<table><thead><tr><th style="width:34px"><input type="checkbox" id="fAll" title="Zaznacz wszystkie widoczne"${allOn?" checked":""}></th>${th("Faktura","doc",fSort)}${th("Data","at",fSort)}<th class="n">Poz.</th>${th("Szt.","total",fSort,"n")}${th("Zostało","left",fSort,"n")}${th("Status","status",fSort)}${th("Zamknięta","closedAt",fSort)}</tr></thead><tbody>${
-    l.map(i=>`<tr data-inv="${esc(i.key)}" class="${i.key===fSel?"sel":""}" style="cursor:pointer"><td><input type="checkbox" data-fchk="${esc(i.key)}"${fChecked.has(i.key)?" checked":""}></td><td><b>${esc(i.doc)}</b></td><td class="sub">${esc(i.at.slice(0,10))}</td><td class="n">${i.lines.length}</td><td class="n">${fmtQ(i.total)}</td><td class="n">${i.closed?"—":`<b>${fmtQ(i.total-i.used)}</b>`}</td>
+  $("#fTbl").innerHTML=l.length?`<table><thead><tr><th style="width:34px"><input type="checkbox" id="fAll" title="Zaznacz wszystkie widoczne"${allOn?" checked":""}></th>${th("Faktura","doc",fSort)}${th("Wystawiona","dayIss",fSort)}<th class="n">Poz.</th>${th("Szt.","total",fSort,"n")}${th("Zostało","left",fSort,"n")}${th("Status","status",fSort)}${th("Zamknięta","closedAt",fSort)}</tr></thead><tbody>${
+    l.map(i=>`<tr data-inv="${esc(i.key)}" class="${i.key===fSel?"sel":""}" style="cursor:pointer"><td><input type="checkbox" data-fchk="${esc(i.key)}"${fChecked.has(i.key)?" checked":""}></td><td><b>${esc(i.doc)}</b></td><td class="sub" title="Przyjęta ${esc(i.at)}">${esc(i.date||"—")}</td><td class="n">${i.lines.length}</td><td class="n">${fmtQ(i.total)}</td><td class="n">${i.closed?"—":`<b>${fmtQ(i.total-i.used)}</b>`}</td>
       <td><span class="pill ${i.closed?"closed":"open"}">${i.closed?"Zamknięta":"Otwarta"}</span></td><td class="sub">${esc(i.closedAt.slice(0,10))}</td></tr>`).join("")}</tbody></table>`
     :`<div class="empty">${invoices.length?(fStatus==="open"&&!$("#fQ").value&&!$("#fFrom").value&&!$("#fTo").value?"Wszystkie faktury są zamknięte 👍":"Nic nie pasuje do filtrów."):"Nie ma jeszcze faktur. Dodaj pierwszą przyciskiem „+ Nowa faktura”."}</div>`;
   if($("#fAll"))$("#fAll").indeterminate=someOn&&!allOn;fSelInfo();
@@ -621,7 +635,7 @@ function renderFakt(){
   renderFDetail()}
 function renderFDetail(){const inv=invoices.find(i=>i.key===fSel),box=$("#fDetail");
   if(!inv){box.innerHTML=`<div class="empty">Wybierz fakturę z listy.</div>`;return}
-  box.innerHTML=`<h3>${esc(inv.doc)}</h3><div class="note">Przyjęta ${esc(inv.at)} · <span class="pill ${inv.closed?"closed":"open"}">${inv.closed?"Zamknięta "+esc(inv.closedAt.slice(0,10)):"Otwarta — zostało "+fmtQ(inv.total-inv.used)+" szt."}</span></div>
+  box.innerHTML=`<h3>${esc(inv.doc)}</h3><div class="note">${inv.date?`Wystawiona ${esc(inv.date)} · `:""}Przyjęta ${esc(inv.at)} · <span class="pill ${inv.closed?"closed":"open"}">${inv.closed?"Zamknięta "+esc(inv.closedAt.slice(0,10)):"Otwarta — zostało "+fmtQ(inv.total-inv.used)+" szt."}</span></div>
     ${inv.lines.map(x=>{const u=Math.min(x.used,x.qty),pc=x.qty?Math.round(u/x.qty*100):0;
       return `<h4><span>${esc(x.name)}</span><span class="note">${fmtQ(u)} / ${fmtQ(x.qty)} szt.</span></h4><div class="prog"><i class="${u>=x.qty?"full":""}" style="width:${pc}%"></i></div>
       ${x.allocs.length?`<table><thead><tr><th>PP</th><th class="n">Ilość</th><th>Data</th><th>Kto</th></tr></thead><tbody>${x.allocs.map(a=>`<tr><td><b>${esc(a.pp)}</b></td><td class="n">${fmtQ(a.qty)}</td><td class="sub">${esc(a.at)}</td><td class="sub">${esc(a.by)}</td></tr>`).join("")}</tbody></table>`:'<div class="note">Jeszcze nic nie wydano.</div>'}`}).join("")}`}
@@ -646,6 +660,7 @@ function fPeriodText(){const f=$("#fFrom").value,t=$("#fTo").value;if(!f&&!t)ret
 /* Raport faktur: wersja standardowa (krótka) albo pełna („pełna wersja”).
    Standardowa: bez daty przyjęcia, kodów i dat wydań (wydruk/PDF zostawia „Przyjęta …”, ale bez dat wydań). */
 ["#fFull","#fPdf"].forEach(x=>$(x).onchange=fSelInfo);
+const invMeta=i=>(i.date?"Wystawiona "+i.date+" · ":"")+"Przyjęta "+i.at;
 const invStatus=i=>i.closed?"Zamknięta":"Otwarta";
 const invTitle=i=>`${i.doc} — ${i.closed?"zamknięta "+i.closedAt.slice(0,10):"otwarta, zostało "+fmtQ(i.total-i.used)+" szt."}`;
 const allocLine=(x,full)=>x.allocs.map(a=>`PP ${a.pp}: ${fmtQ(a.qty)}`+(full?` (${a.at.slice(0,10)})`:"")).join(", ")||"—";
@@ -660,18 +675,18 @@ $("#fXlsx").onclick=async()=>{const l=fPicked();if(!l.length)return toast("Zazna
       if(!x.allocs.length)rows.push([...base,"","",...(full?["",""]:[""])]);
       else x.allocs.forEach((a,k)=>rows.push([...(k?blank:base),a.pp,a.qty,...(full?[a.at,a.by]:[a.by])]))});
     return{name:inv.doc,
-      top:[["Faktura",inv.doc],...(full?[["Data przyjęcia",inv.at]]:[]),["Status",invStatus(inv)+(inv.closed?" "+inv.closedAt.slice(0,10):"")],
+      top:[["Faktura",inv.doc],["Data wystawienia",inv.date||"—"],...(full?[["Data przyjęcia",inv.at]]:[]),["Status",invStatus(inv)+(inv.closed?" "+inv.closedAt.slice(0,10):"")],
         ["Na fakturze",inv.total],["Wydano",inv.used],["Zostało",inv.total-inv.used],[]],
       header:full?["Produkt","Kod","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Data wydania","Kto"]:["Produkt","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Kto"],
       rows,widths:full?[30,22,12,13,9,12,13,17,14]:[32,12,13,9,12,13,14]}});
   if(l.length>1)sheets.unshift({name:"Podsumowanie",top:[["Rozliczenie faktur",""],["Wydruk",new Date().toLocaleString("pl-PL")],[]],
-    header:[...["Faktura"],...(full?["Data przyjęcia"]:[]),"Status","Data zamknięcia","Pozycji","Na fakturze","Wydano","Zostało","Numery PP"],
-    rows:l.map(i=>[i.doc,...(full?[i.at.slice(0,10)]:[]),invStatus(i),i.closedAt.slice(0,10),i.lines.length,i.total,i.used,i.total-i.used,ppList(i)]),
-    widths:full?[22,14,11,15,9,12,9,9,40]:[22,11,15,9,12,9,9,40]});
+    header:["Faktura","Data wystawienia",...(full?["Data przyjęcia"]:[]),"Status","Data zamknięcia","Pozycji","Na fakturze","Wydano","Zostało","Numery PP"],
+    rows:l.map(i=>[i.doc,i.date,...(full?[i.at.slice(0,10)]:[]),invStatus(i),i.closedAt.slice(0,10),i.lines.length,i.total,i.used,i.total-i.used,ppList(i)]),
+    widths:full?[22,15,14,11,15,9,12,9,9,40]:[22,15,11,15,9,12,9,9,40]});
   downloadBlob(xlsxBook(sheets),invFile(l)+"-"+dayStr(new Date())+".xlsx")};
 $("#fPrint").onclick=()=>{const l=fPicked();if(!l.length)return toast("Zaznacz faktury na liście",true);const full=$("#fFull").checked;
   printDoc(`<div class="rep"><h1>Rozliczenie faktur</h1><div class="meta">${plFaktur(l.length)} · wydruk ${esc(new Date().toLocaleString("pl-PL"))}</div>
-    ${l.map(inv=>`<div class="inv"><h2>${esc(invTitle(inv))}</h2><div class="meta">Przyjęta ${esc(inv.at)}</div>
+    ${l.map(inv=>`<div class="inv"><h2>${esc(invTitle(inv))}</h2><div class="meta">${esc(invMeta(inv))}</div>
       <table><thead><tr><th>Produkt</th>${full?"<th>Kod</th>":""}<th>Na fakturze</th><th>Wydano</th><th>Rozdysponowanie na PP</th></tr></thead><tbody>${
       inv.lines.map(x=>`<tr><td>${esc(x.name)}</td>${full?`<td>${esc(x.code)}</td>`:""}<td style="text-align:right">${fmtQ(x.qty)}</td><td style="text-align:right">${fmtQ(Math.min(x.used,x.qty))}</td><td>${esc(allocLine(x,full))}</td></tr>`).join("")}</tbody></table></div>`).join("")}</div>`,"A4")};
 
@@ -691,7 +706,7 @@ async function savePdf(l,full){const b=$("#fXlsx"),t=b.textContent;b.disabled=tr
       if(!i){doc.setFont("MS","bold");doc.setFontSize(15);doc.text("Rozliczenie faktur",M,y);y+=5.5;
         doc.setFont("MS","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text(`${plFaktur(l.length)} · wydruk ${new Date().toLocaleString("pl-PL")}`,M,y);y+=9;doc.setTextColor(0)}
       doc.setFont("MS","bold");doc.setFontSize(12);doc.text(invTitle(inv),M,y);y+=5;
-      doc.setFont("MS","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text("Przyjęta "+inv.at,M,y);doc.setTextColor(0);y+=2;
+      doc.setFont("MS","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text(invMeta(inv),M,y);doc.setTextColor(0);y+=2;
       doc.autoTable({startY:y,margin:{left:M,right:M,top:M,bottom:16},theme:"grid",
         head:[["Produkt",...(full?["Kod"]:[]),"Na fakturze","Wydano","Rozdysponowanie na PP"]],
         body:inv.lines.map(x=>[x.name,...(full?[x.code]:[]),fmtQ(x.qty),fmtQ(Math.min(x.used,x.qty)),allocLine(x,full)]),
