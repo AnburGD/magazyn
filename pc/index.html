@@ -14,7 +14,7 @@
 /* Wersja na komputer. Te same dane co w telefonie (ten sam Apps Script i ta sama tabela),
    ale osobna strona — wersja na telefon nie jest tu w ogóle zmieniana.
    Przy każdej zmianie podnieś PC_VER (komputer pokaże „Jest nowa wersja”). */
-const PC_VER = "4";
+const PC_VER = "5";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_l3IXdsc9yk0NrP27OX9__7Dij8gnpiuG3XyWeDsgG0oDVVVV7z911Y06SQ8cO7M8qQ/exec";
 </script>
 <style>
@@ -142,6 +142,9 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:6px;font-weight:600;z-index:50;box-shadow:0 4px 18px rgba(0,0,0,.25)}
 .toast.err{background:var(--err);color:#fff}
 .upd{position:fixed;top:14px;right:18px;z-index:45;background:#f5c22b;color:#1b1e1c;border:0;border-radius:6px;padding:10px 16px;font:700 15px var(--body);cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+.opts{display:flex;justify-content:flex-end;gap:14px;margin:-8px 0 10px;font-size:12px;color:var(--muted)}
+.opts label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.opts input{width:13px;height:13px;margin:0}
 .confirm{display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
 #printArea{display:none}
 @media (max-width:1100px){.split{grid-template-columns:1fr}.detail{position:static;max-height:none}.tiles{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}}
@@ -258,6 +261,8 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
     <span class="note" id="fSelInfo"></span>
     <button class="btn" id="fPrint" disabled>Drukuj zaznaczone</button>
     <button class="btn primary" id="fXlsx" disabled>Raport dla księgowości (Excel)</button></div>
+  <div class="opts"><label title="Dodaje datę przyjęcia, kody produktów i daty wydań"><input type="checkbox" id="fFull"> pełna wersja</label>
+    <label title="Raport dla księgowości zapisuje się jako PDF (taki sam jak wydruk) zamiast Excela"><input type="checkbox" id="fPdf"> PDF (wersja do druku)</label></div>
   <div class="bar">
     <div class="seg" id="fStatus"><button data-f="open" aria-pressed="true">Otwarte</button><button data-f="closed" aria-pressed="false">Zamknięte</button><button data-f="all" aria-pressed="false">Wszystkie</button></div>
     <select id="fBy"><option value="inv">okres wg daty faktury</option><option value="closed">okres wg daty zamknięcia</option></select>
@@ -628,7 +633,7 @@ $("#fTbl").addEventListener("change",e=>{
 function fSelInfo(){const n=fChecked.size,vis=new Set(fList().map(i=>i.key)),hid=[...fChecked].filter(k=>!vis.has(k)).length;
   $("#fSelInfo").innerHTML=n?`Zaznaczono: <b>${n}</b>${hid?` (${hid} ukrytych przez filtr)`:""} · <button class="cellbtn" id="fClr">wyczyść</button>`:"";
   $("#fXlsx").disabled=$("#fPrint").disabled=!n;
-  $("#fXlsx").textContent=n?`Raport dla księgowości — Excel (${n})`:"Raport dla księgowości (Excel)";$("#fPrint").textContent=n?`Drukuj zaznaczone (${n})`:"Drukuj zaznaczone"}
+  const fmt=$("#fPdf").checked?"PDF":"Excel";$("#fXlsx").textContent=n?`Raport dla księgowości — ${fmt} (${n})`:`Raport dla księgowości (${fmt})`;$("#fPrint").textContent=n?`Drukuj zaznaczone (${n})`:"Drukuj zaznaczone"}
 $("#fSelInfo").addEventListener("click",e=>{if(e.target.id==="fClr"){fChecked.clear();renderFakt()}});
 const fPicked=()=>{const l=fList(),seen=new Set(l.map(i=>i.key));return[...l.filter(i=>fChecked.has(i.key)),...invoices.filter(i=>fChecked.has(i.key)&&!seen.has(i.key))]};
 $("#fTbl").addEventListener("click",e=>{if(e.target.matches("input[type=checkbox]")||e.target.closest("th"))return;const r=e.target.closest("tr[data-inv]");if(!r)return;fSel=r.dataset.inv;
@@ -638,24 +643,67 @@ $("#fStatus").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;fSta
 $("#fNew").onclick=()=>{opMode="P";setSeg("#opMode","m","P");if(!opRows.some(r=>r.p||r.q))opRows=[{p:"",q:"",pp:""}];go("ops");renderOps();$("#opDocIn").focus()};
 function fPeriodText(){const f=$("#fFrom").value,t=$("#fTo").value;if(!f&&!t)return"";
   return ($("#fBy").value==="closed"?"zamknięte ":"faktury z okresu ")+(f?"od "+f+" ":"")+(t?"do "+t:"")}
-$("#fXlsx").onclick=()=>{const l=fPicked();if(!l.length)return toast("Zaznacz faktury na liście",true);
-  const st=i=>i.closed?"Zamknięta":"Otwarta",ppList=i=>[...new Set(i.lines.flatMap(x=>x.allocs.map(a=>String(a.pp))))].join(", ");
-  const sheets=l.map(inv=>{const rows=[];inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty),base=[x.name,x.code,x.qty,u,x.qty-u];
-      if(!x.allocs.length)rows.push([...base,"","","",""]);else x.allocs.forEach((a,k)=>rows.push([...(k?["","","","",""]:base),a.pp,a.qty,a.at,a.by]))});
-    return{name:inv.doc,top:[["Faktura",inv.doc],["Data przyjęcia",inv.at],["Status",st(inv)+(inv.closed?" "+inv.closedAt.slice(0,10):"")],
+/* Raport faktur: wersja standardowa (krótka) albo pełna („pełna wersja”).
+   Standardowa: bez daty przyjęcia, kodów i dat wydań (wydruk/PDF zostawia „Przyjęta …”, ale bez dat wydań). */
+["#fFull","#fPdf"].forEach(x=>$(x).onchange=fSelInfo);
+const invStatus=i=>i.closed?"Zamknięta":"Otwarta";
+const invTitle=i=>`${i.doc} — ${i.closed?"zamknięta "+i.closedAt.slice(0,10):"otwarta, zostało "+fmtQ(i.total-i.used)+" szt."}`;
+const allocLine=(x,full)=>x.allocs.map(a=>`PP ${a.pp}: ${fmtQ(a.qty)}`+(full?` (${a.at.slice(0,10)})`:"")).join(", ")||"—";
+const invFile=l=>l.length===1?"faktura-"+l[0].doc.replace(/[^\p{L}\p{N}]+/gu,"_").replace(/^_|_$/g,""):"faktury-rozliczenie";
+const plFaktur=n=>n+" "+(n===1?"faktura":n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?"faktury":"faktur");
+$("#fXlsx").onclick=async()=>{const l=fPicked();if(!l.length)return toast("Zaznacz faktury na liście",true);
+  const full=$("#fFull").checked;
+  if($("#fPdf").checked)return savePdf(l,full);
+  const ppList=i=>[...new Set(i.lines.flatMap(x=>x.allocs.map(a=>String(a.pp))))].join(", ");
+  const sheets=l.map(inv=>{const rows=[];
+    inv.lines.forEach(x=>{const u=Math.min(x.used,x.qty),base=full?[x.name,x.code,x.qty,u,x.qty-u]:[x.name,x.qty,u,x.qty-u],blank=base.map(()=>"");
+      if(!x.allocs.length)rows.push([...base,"","",...(full?["",""]:[""])]);
+      else x.allocs.forEach((a,k)=>rows.push([...(k?blank:base),a.pp,a.qty,...(full?[a.at,a.by]:[a.by])]))});
+    return{name:inv.doc,
+      top:[["Faktura",inv.doc],...(full?[["Data przyjęcia",inv.at]]:[]),["Status",invStatus(inv)+(inv.closed?" "+inv.closedAt.slice(0,10):"")],
         ["Na fakturze",inv.total],["Wydano",inv.used],["Zostało",inv.total-inv.used],[]],
-      header:["Produkt","Kod","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Data wydania","Kto"],rows,widths:[30,22,12,13,9,12,13,17,14]}});
+      header:full?["Produkt","Kod","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Data wydania","Kto"]:["Produkt","Na fakturze","Wydano razem","Zostało","PP","Wydano na PP","Kto"],
+      rows,widths:full?[30,22,12,13,9,12,13,17,14]:[32,12,13,9,12,13,14]}});
   if(l.length>1)sheets.unshift({name:"Podsumowanie",top:[["Rozliczenie faktur",""],["Wydruk",new Date().toLocaleString("pl-PL")],[]],
-    header:["Faktura","Data przyjęcia","Status","Data zamknięcia","Pozycji","Na fakturze","Wydano","Zostało","Numery PP"],
-    rows:l.map(i=>[i.doc,i.at.slice(0,10),st(i),i.closedAt.slice(0,10),i.lines.length,i.total,i.used,i.total-i.used,ppList(i)]),widths:[22,14,11,15,9,12,9,9,40]});
-  const file=l.length===1?"faktura-"+l[0].doc.replace(/[^\p{L}\p{N}]+/gu,"_").replace(/^_|_$/g,""):"faktury-rozliczenie";
-  downloadBlob(xlsxBook(sheets),file+"-"+dayStr(new Date())+".xlsx")};
-$("#fPrint").onclick=()=>{const l=fPicked();if(!l.length)return toast("Zaznacz faktury na liście",true);
-  printDoc(`<div class="rep"><h1>Rozliczenie faktur</h1><div class="meta">${l.length} ${l.length===1?"faktura":l.length<5?"faktury":"faktur"} · wydruk ${esc(new Date().toLocaleString("pl-PL"))}</div>
-    ${l.map(inv=>`<div class="inv"><h2>${esc(inv.doc)} — ${inv.closed?"zamknięta "+esc(inv.closedAt.slice(0,10)):"otwarta, zostało "+fmtQ(inv.total-inv.used)+" szt."}</h2>
-      <div class="meta">Przyjęta ${esc(inv.at)}</div>
-      <table><thead><tr><th>Produkt</th><th>Na fakturze</th><th>Wydano</th><th>Rozdysponowanie na PP</th></tr></thead><tbody>${
-      inv.lines.map(x=>`<tr><td>${esc(x.name)}</td><td style="text-align:right">${fmtQ(x.qty)}</td><td style="text-align:right">${fmtQ(Math.min(x.used,x.qty))}</td><td>${x.allocs.map(a=>`PP ${esc(a.pp)}: ${fmtQ(a.qty)} (${esc(a.at.slice(0,10))})`).join(", ")||"—"}</td></tr>`).join("")}</tbody></table></div>`).join("")}</div>`,"A4")};
+    header:[...["Faktura"],...(full?["Data przyjęcia"]:[]),"Status","Data zamknięcia","Pozycji","Na fakturze","Wydano","Zostało","Numery PP"],
+    rows:l.map(i=>[i.doc,...(full?[i.at.slice(0,10)]:[]),invStatus(i),i.closedAt.slice(0,10),i.lines.length,i.total,i.used,i.total-i.used,ppList(i)]),
+    widths:full?[22,14,11,15,9,12,9,9,40]:[22,11,15,9,12,9,9,40]});
+  downloadBlob(xlsxBook(sheets),invFile(l)+"-"+dayStr(new Date())+".xlsx")};
+$("#fPrint").onclick=()=>{const l=fPicked();if(!l.length)return toast("Zaznacz faktury na liście",true);const full=$("#fFull").checked;
+  printDoc(`<div class="rep"><h1>Rozliczenie faktur</h1><div class="meta">${plFaktur(l.length)} · wydruk ${esc(new Date().toLocaleString("pl-PL"))}</div>
+    ${l.map(inv=>`<div class="inv"><h2>${esc(invTitle(inv))}</h2><div class="meta">Przyjęta ${esc(inv.at)}</div>
+      <table><thead><tr><th>Produkt</th>${full?"<th>Kod</th>":""}<th>Na fakturze</th><th>Wydano</th><th>Rozdysponowanie na PP</th></tr></thead><tbody>${
+      inv.lines.map(x=>`<tr><td>${esc(x.name)}</td>${full?`<td>${esc(x.code)}</td>`:""}<td style="text-align:right">${fmtQ(x.qty)}</td><td style="text-align:right">${fmtQ(Math.min(x.used,x.qty))}</td><td>${esc(allocLine(x,full))}</td></tr>`).join("")}</tbody></table></div>`).join("")}</div>`,"A4")};
+
+/* PDF — biblioteki i czcionka (z polskimi znakami) ładowane dopiero przy pierwszym użyciu */
+const loadScript=src=>new Promise((ok,bad)=>{const e=document.createElement("script");e.src=src;e.onload=ok;e.onerror=()=>bad(new Error("Nie można załadować "+src));document.head.append(e)});
+let pdfLibs=null;
+function loadPdfLibs(){return pdfLibs||(pdfLibs=(async()=>{
+  await loadScript("../lib/jspdf.umd.min.js");await loadScript("../lib/jspdf.plugin.autotable.min.js");
+  const b64=async u=>{const buf=new Uint8Array(await (await fetch(u)).arrayBuffer());let s="";for(let i=0;i<buf.length;i+=32768)s+=String.fromCharCode.apply(null,buf.subarray(i,i+32768));return btoa(s)};
+  return{reg:await b64("../lib/fonts/MagazynSans-Regular.ttf"),bold:await b64("../lib/fonts/MagazynSans-Bold.ttf")}})().catch(e=>{pdfLibs=null;throw e}))}
+async function savePdf(l,full){const b=$("#fXlsx"),t=b.textContent;b.disabled=true;b.textContent="Tworzę PDF…";
+  try{const fonts=await loadPdfLibs();const{jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:"mm",format:"a4"});
+    doc.addFileToVFS("MS-R.ttf",fonts.reg);doc.addFont("MS-R.ttf","MS","normal");doc.addFileToVFS("MS-B.ttf",fonts.bold);doc.addFont("MS-B.ttf","MS","bold");
+    const M=12;
+    l.forEach((inv,i)=>{let y=M+4;if(i)doc.addPage();
+      if(!i){doc.setFont("MS","bold");doc.setFontSize(15);doc.text("Rozliczenie faktur",M,y);y+=5.5;
+        doc.setFont("MS","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text(`${plFaktur(l.length)} · wydruk ${new Date().toLocaleString("pl-PL")}`,M,y);y+=9;doc.setTextColor(0)}
+      doc.setFont("MS","bold");doc.setFontSize(12);doc.text(invTitle(inv),M,y);y+=5;
+      doc.setFont("MS","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text("Przyjęta "+inv.at,M,y);doc.setTextColor(0);y+=2;
+      doc.autoTable({startY:y,margin:{left:M,right:M,top:M,bottom:16},theme:"grid",
+        head:[["Produkt",...(full?["Kod"]:[]),"Na fakturze","Wydano","Rozdysponowanie na PP"]],
+        body:inv.lines.map(x=>[x.name,...(full?[x.code]:[]),fmtQ(x.qty),fmtQ(Math.min(x.used,x.qty)),allocLine(x,full)]),
+        styles:{font:"MS",fontSize:9,textColor:0,lineColor:150,lineWidth:.2,cellPadding:1.6,overflow:"linebreak"},
+        headStyles:{font:"MS",fontStyle:"bold",fillColor:238,textColor:0},
+        columnStyles:full?{2:{halign:"right",cellWidth:20},3:{halign:"right",cellWidth:16}}:{1:{halign:"right",cellWidth:20},2:{halign:"right",cellWidth:16}}})});
+    const n=doc.getNumberOfPages();
+    for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont("MS","normal");doc.setFontSize(8);doc.setTextColor(120);
+      doc.text("Magazyn QR · Rozliczenie faktur",M,290);doc.text(`Strona ${i} z ${n}`,210-M,290,{align:"right"})}
+    doc.save(invFile(l)+"-"+dayStr(new Date())+".pdf");toast("PDF zapisany")}
+  catch(e){toast("Nie udało się zrobić PDF: "+e.message,true)}
+  finally{b.disabled=false;b.textContent=t}}
 
 /* ===== PRODUKTY I ETYKIETY ===== */
 const prSort={key:"name",dir:"asc"};const lblQty=new Map();let editName=null,lblPrevCode=null;
